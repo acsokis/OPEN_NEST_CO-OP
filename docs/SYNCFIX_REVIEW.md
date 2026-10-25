@@ -23,7 +23,11 @@ transfer control and publish its final drop.
 - Preserve the native projectile start clock when applying host trajectories.
 - Replicate direct gun elevation and include firing pose in guest fire requests.
 - Resolve shell prefabs from loaded definitions and support partially empty drums.
-- Add experimental FireMissionCard creation using native capture/restore APIs.
+- Add FireMissionCard creation and bidirectional dragging/drop surface state
+  using native capture/restore APIs, with local drag/release protection.
+- Add compressed native map initialization for dynamic photos/impact objects and
+  saved token surface state; scene readiness and request correlation are checked.
+- Include native host drawings restored from a save in marker snapshots.
 - Transfer counter-battery time/running/expired/stopped together, prevent guest
   autonomous timer updates and spawns, and reject guest automatic mission outcomes.
 - Add a persistent local F8 chat visibility toggle; hidden chat ignores Enter.
@@ -36,20 +40,21 @@ but an impact only at 23:28:32. It also showed missing MapMarkerYellow prefabs,
 counter-battery spawns with no host seed, and a guest-originated failure event.
 Private logs and account identifiers are deliberately excluded from this repo.
 
-Local MelonLoader builds succeeded for syncfix.7 (71 warnings, zero errors).
+Local MelonLoader builds succeeded for syncfix.8 (72 warnings, zero errors).
 The installed syncfix.6 reached the main menu. Packaging checks verified payload
 hashes and installer parsing. These do not establish multiplayer correctness.
-The subsequent token ownership adjustment also builds successfully (71 warnings,
-zero errors); its two-PC runtime test remains outstanding.
+Nine tests exercise the actual map snapshot compression codec, including Unicode,
+large payload round trips, malformed input, and compressed/decompressed size limits.
+The map snapshot and token/card manipulation runtime tests remain outstanding.
 
 ## Outstanding validation and limitations
 
 - Two-PC end-to-end testing is incomplete; earlier test builds had major failures.
 - Confirm each drawing tool, measurement label/note, late join, and reconnect.
-- Token messages still skip objects absent from the receiver; a map-only snapshot
-  is not a complete transfer of the host's saved mission or generated photo data.
-- Calculator card creation is experimental; subsequent card movements/deletion
-  are not implemented by the new module, and native JSON restore needs runtime validation.
+- Native map restore, late join, and generated photo restoration need two-PC
+  runtime validation. Mission progression/graphs are not restored by map transfer.
+- Calculator card creation and movement are implemented but need runtime testing;
+  deletion of destroyed calculator cards is not yet replicated by the new module.
 - Verify counter-battery start/pause/expiry and exactly one host-driven impact;
   the current spawn path requires exactly one active cinematic spawner.
 - Verify both guns, loading, trajectory, impact, engine, and power switch.

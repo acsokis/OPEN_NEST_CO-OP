@@ -1,7 +1,7 @@
 using MelonLoader;
 using OpenNestCoop.Core;
 
-[assembly: MelonInfo(typeof(OpenNestCoop.MelonModEntry), "Open Nest Co-op", "0.2.1-syncfix.7", "OpenNestCoop; local compatibility repair")]
+[assembly: MelonInfo(typeof(OpenNestCoop.MelonModEntry), "Open Nest Co-op", "0.2.1-syncfix.8", "OpenNestCoop; local compatibility repair")]
 [assembly: MelonGame("Iron Nest", "Iron Nest Heavy Turret Simulator")]
 
 namespace OpenNestCoop;

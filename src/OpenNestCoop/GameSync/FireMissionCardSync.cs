@@ -18,17 +18,24 @@ public sealed class FireMissionCardSync : ISyncedModule
     internal static void Register() => CoopSyncRegistry.PendingRegister(false, () => new FireMissionCardSync(), Channel);
     private readonly HashSet<string> _seen = new();
     private readonly Dictionary<string, string> _pending = new();
+    private readonly Dictionary<string, bool> _dragging = new();
+    private readonly Dictionary<string, float> _releaseUntil = new();
     private float _timer;
     private float _heartbeat;
+    private string _scene = "";
+    public FireMissionCardSync() { CoopRuntime.LogSource?.LogInfo("[FireMissionCardSync] registered: creation and shared movement"); }
 
     public void Tick(float dt)
     {
         var net = CoopRuntime.Net;
         if (net == null || (net.State != SessionState.Hosting && net.State != SessionState.Joined)) return;
         if (MsgType == 0) return;
+        string scene = MissionManager.Instance?.CurrentMissionSceneName ?? "";
+        if (scene != _scene) { Reset(); _scene = scene; }
+        if (FireMission.Instance == null || string.IsNullOrEmpty(scene)) return;
         _timer += dt;
         _heartbeat += dt;
-        if (_timer < 1f) return;
+        if (_timer < 0.15f) return;
         _timer = 0f;
         try
         {
@@ -42,7 +49,13 @@ public sealed class FireMissionCardSync : ISyncedModule
                 var save = card.CaptureMissionState();
                 if (save == null || string.IsNullOrEmpty(save.Id)) continue;
                 bool fresh = _seen.Add(save.Id);
-                if (!fresh && !heartbeat) continue;
+                var item = card.GetComponent<DraggableItem>();
+                bool dragging = item != null && item.IsBeingDragged;
+                bool wasDragging = _dragging.TryGetValue(save.Id, out var was) && was;
+                _dragging[save.Id] = dragging;
+                bool dropped = wasDragging && !dragging;
+                if (dropped) _releaseUntil[save.Id] = Time.realtimeSinceStartup + 1f;
+                if (!fresh && !heartbeat && !dragging && !dropped) continue;
                 var json = JsonUtility.ToJson(save);
                 Send(save.Id, json);
             }
@@ -55,7 +68,7 @@ public sealed class FireMissionCardSync : ISyncedModule
         var net = CoopRuntime.Net;
         if (net == null || MsgType == 0) return;
         var w = NetProtocol.Begin((MsgType)MsgType);
-        w.Put(id); w.Put(json);
+        w.Put(_scene); w.Put(id); w.Put(json);
         var data = NetProtocol.Snapshot(w);
         if (net.IsHost)
         {
@@ -73,14 +86,13 @@ public sealed class FireMissionCardSync : ISyncedModule
         try
         {
             var reader = new NetDataReader(data);
-            reader.GetByte();
+            reader.SkipBytes(NetProtocol.TypeLen);
+            string scene = reader.GetString();
+            if (scene != (MissionManager.Instance?.CurrentMissionSceneName ?? "")) return;
             string id = reader.GetString();
             string json = reader.GetString();
             if (string.IsNullOrEmpty(id) || json.Length > 65536) return;
-            if (!_seen.Contains(id))
-            {
-                if (!Restore(id, json) && _pending.Count < 128) _pending[id] = json;
-            }
+            if (!Restore(id, json) && _pending.Count < 128) _pending[id] = json;
             if (net.IsHost)
                 foreach (var player in net.Roster)
                     if (!player.IsLocal && (ulong)player.SteamId != from)
@@ -91,20 +103,32 @@ public sealed class FireMissionCardSync : ISyncedModule
 
     private bool Restore(string id, string json)
     {
+        var save = JsonUtility.FromJson(json, Il2CppType.Of<FireMissionCardSaveData>()).Cast<FireMissionCardSaveData>();
+        if (save == null || save.Id != id) return false;
         // Existing cards are never recreated: do not interrupt player handling.
         foreach (var card in UnityEngine.Object.FindObjectsOfType<FireMissionCard>(true))
         {
             if (card != null && card.CaptureMissionState()?.Id == id)
-            { _seen.Add(id); return true; }
+            {
+                var item = card.GetComponent<DraggableItem>();
+                if (item != null && item.IsBeingDragged) return true;
+                if (_releaseUntil.TryGetValue(id, out var until) && Time.realtimeSinceStartup < until) return true;
+                if (item != null)
+                {
+                    var surface = new MissionSaveManager.DraggableSurfaceSaveState {
+                        SurfaceTag = save.SurfaceTag, SurfaceLocalPosition = save.SurfaceLocalPosition,
+                        SurfaceLocalRotation = save.SurfaceLocalRotation, WorldPosition = save.WorldPosition,
+                        WorldRotation = save.WorldRotation, LocalScale = save.LocalScale, Active = save.Active,
+                        Location = save.Location, StackingNormalOffset = save.StackingNormalOffset
+                    };
+                    MissionSaveManager.RestoreDraggableSurfaceState(item, surface, Surfaces());
+                }
+                _seen.Add(id); return true;
+            }
         }
         var printers = UnityEngine.Object.FindObjectsOfType<FireMissionCardPrinter>(true);
         if (printers == null || printers.Length != 1) return false;
-        var save = JsonUtility.FromJson(json, Il2CppType.Of<FireMissionCardSaveData>()).Cast<FireMissionCardSaveData>();
-        if (save == null || save.Id != id) return false;
-        var found = UnityEngine.Object.FindObjectsOfType<DragSurface>(true);
-        var surfaces = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<DragSurface>(found.Length);
-        for (int i = 0; i < found.Length; i++) surfaces[i] = found[i];
-        printers[0].RestoreCard(save, surfaces);
+        printers[0].RestoreCard(save, Surfaces());
         foreach (var card in UnityEngine.Object.FindObjectsOfType<FireMissionCard>(true))
             if (card != null && card.CaptureMissionState()?.Id == id)
             {
@@ -117,5 +141,12 @@ public sealed class FireMissionCardSync : ISyncedModule
 
     public void OnSessionStarted() { Reset(); }
     public void OnSessionEnded() { Reset(); }
-    public void Reset() { _seen.Clear(); _pending.Clear(); _timer = _heartbeat = 0f; }
+    private static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<DragSurface> Surfaces()
+    {
+        var found = UnityEngine.Object.FindObjectsOfType<DragSurface>(true);
+        var result = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<DragSurface>(found.Length);
+        for (int i = 0; i < found.Length; i++) result[i] = found[i];
+        return result;
+    }
+    public void Reset() { _seen.Clear(); _pending.Clear(); _dragging.Clear(); _releaseUntil.Clear(); _timer = _heartbeat = 0f; _scene = ""; }
 }

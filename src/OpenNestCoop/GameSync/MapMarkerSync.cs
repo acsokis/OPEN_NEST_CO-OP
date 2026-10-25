@@ -399,6 +399,18 @@ public sealed class MapMarkerSync : ISyncedModule
     {
         try
         {
+            // A host may continue a save containing drawings created before
+            // the co-op hook existed. Include those native placed markers too.
+            var placer = GetPlacer();
+            if (placer?.placedMarkers != null)
+                foreach (var marker in placer.placedMarkers)
+                {
+                    if (marker == null) continue;
+                    bool tracked = false;
+                    foreach (var entry in _markers)
+                        if (entry.Value != null && entry.Value.Pointer == marker.gameObject.Pointer) { tracked = true; break; }
+                    if (!tracked) _markers["saved:" + Guid.NewGuid().ToString("N")] = marker.gameObject;
+                }
             if (_markers.Count == 0) return null;
             var valid = new List<KeyValuePair<string, GameObject>>();
             foreach (var entry in _markers)

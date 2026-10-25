@@ -11,6 +11,8 @@ public sealed class CounterBatteryClockSync : ISyncedModule
 {
     private const string Channel = "counterbattery.clock";
     public int MsgType => CoopRuntime.Net?.ChannelType(Channel) ?? 0;
+    public NetModulePriority NetPriority => NetModulePriority.Critical;
+    public CounterBatteryClockSync() { CoopRuntime.LogSource?.LogInfo("[CounterBatteryClockSync] registered: host-only clock"); }
     private static bool _patched;
     private static bool _applying;
     private float _timer;
@@ -36,6 +38,7 @@ public sealed class CounterBatteryClockSync : ISyncedModule
             harmony.Patch(method, prefix: prefix);
         }
         _patched = true;
+        CoopRuntime.LogSource?.LogInfo("[CounterBatteryClockSync] native timer guards installed");
     }
 
     public void Tick(float dt)
@@ -65,7 +68,7 @@ public sealed class CounterBatteryClockSync : ISyncedModule
         if (net == null || net.IsHost || from != net.HostSteamId) return;
         try
         {
-            var reader = new NetDataReader(data); reader.GetByte();
+            var reader = new NetDataReader(data); reader.SkipBytes(NetProtocol.TypeLen);
             float total = reader.GetFloat(), remaining = reader.GetFloat();
             if (!float.IsFinite(total) || !float.IsFinite(remaining) || total < 0f || remaining < 0f) return;
             _pending = new CounterBatterySaveData {
