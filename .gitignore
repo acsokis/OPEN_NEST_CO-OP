@@ -57,3 +57,8 @@ scripts/interopdump/
 release/
 
 src/OpenNestCore/artifacts/
+
+# Local syncfix packages, extracted payloads, and installation reports
+/artifacts/
+TELEPITES_EREDMENY.txt
+IRON_NEST_UPDATE_8_EREDMENY.txt

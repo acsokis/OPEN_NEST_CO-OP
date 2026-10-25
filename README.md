@@ -1,5 +1,10 @@
 # OPEN-NEST-CO-OP-
 
+> **acsokis experimental syncfix fork (0.2.1-syncfix.8).**
+> This fork contains AI-assisted co-op interoperability repairs contributed by
+> Gabor Kocsis (@acsokis). It is not an official upstream release and full
+> two-PC synchronization is still being tested. See [fork status and build instructions](docs/FORK_STATUS.md).
+
 **Multiplayer co-op mod for [Iron Nest: Heavy Turret Simulator](https://store.steampowered.com/app/2950790)** (Unity 6 / IL2CPP).
 
 Play as a crew inside a giant fortress turret — calibrate machinery, load shells,
