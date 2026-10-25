@@ -46,6 +46,9 @@ hashes and installer parsing. These do not establish multiplayer correctness.
 Nine tests exercise the actual map snapshot compression codec, including Unicode,
 large payload round trips, malformed input, and compressed/decompressed size limits.
 The map snapshot and token/card manipulation runtime tests remain outstanding.
+The syncfix.8 local-host startup registered the native map, calculator card, and
+counter-battery clock modules; timer guards installed without a startup error.
+The local-only test was closed from the main menu and normal Steam launch restored.
 
 ## Outstanding validation and limitations
 
