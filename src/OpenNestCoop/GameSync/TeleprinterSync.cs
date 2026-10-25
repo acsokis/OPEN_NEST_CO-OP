@@ -63,6 +63,7 @@ public sealed class TeleprinterSync : ISyncedModule
 
     // 状态同步：打字机类型 -> 最近一次完整富文本（检测变化）
     private readonly System.Collections.Generic.Dictionary<byte, string> _lastRich = new();
+    private float _stateHeartbeat;
     /// <summary>⚠️ 2026-09-12 开局偶发不同步修复（机制）：收到打字机事件时打字机对象**还没注册**
     /// （`FindPrinter`→`Teleprinter.GetTeleprinter` 返回 null，任务场景加载中/加入时序）→ 旧实现
     /// 只打 warning 直接 return **丢弃**；而 EvState 只在**文本变化**时广播（主机 `_lastRich` 已更新）
@@ -244,6 +245,7 @@ public sealed class TeleprinterSync : ISyncedModule
     {
         var net = CoopRuntime.Net;
         if (net == null) return;
+        _stateHeartbeat += dt;
         // ⚠️ 2026-09-12 开局偶发不同步修复（见 _pendingTp 注释）：重试那些"收到时打字机对象还不存在"
         // 而暂存的事件。客户端也会跑（不能放在下面 `net.State != Hosting` 的早期返回之后）。
         _retryTimer += dt;
@@ -287,6 +289,10 @@ public sealed class TeleprinterSync : ISyncedModule
         // 避免客机打字机状态变化回发主机 → 主机 Apply → 停协程/设文本 → 主机打字机卡住。
         if (net.State != SessionState.Hosting) return;
         if (IsApplying) return;
+        // Resend only printer state, never the full mission snapshot. This repairs
+        // a late-created guest printer without replaying mission or entity state.
+        bool forcePrinterState = _stateHeartbeat >= 3f;
+        if (forcePrinterState) _stateHeartbeat = 0f;
         try
         {
             EnsureCache(dt);
@@ -327,7 +333,7 @@ public sealed class TeleprinterSync : ISyncedModule
                 int revealed = 0;
                 try { revealed = tp._currentRevealedCharIndex; } catch { }
                 string sig2 = rich + "|" + revealed.ToString();
-                if (_lastRich.TryGetValue(ptype, out var last) && last == sig2) continue;
+                if (!forcePrinterState && _lastRich.TryGetValue(ptype, out var last) && last == sig2) continue;
                 _lastRich[ptype] = sig2;
                 // 诊断：打印打字机视觉状态字段（打字针/纸张/揭示数），降频（每 20 次状态变化打一次）
                 if ((++_stateDiag % 20) == 1)

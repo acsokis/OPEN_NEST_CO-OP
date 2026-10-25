@@ -36,6 +36,9 @@ public class CoopUIManager : MonoBehaviour
 
     // 独立聊天浮动面板（屏幕左中，主菜单之外常驻；联机会话时显示）
     private GameObject _chatRoot;
+    private bool _chatEnabled = true;
+    private bool _chatPreferenceLoaded;
+    private const string ChatPreference = "OpenNestCoop.ChatVisible";
     private RectTransform _chatContent;
     private Image _chatBg;              // 面板背景（未聚焦时隐藏）
     private GameObject _chatHintBar;    // 未聚焦时的小提示条（"回车聊天"）
@@ -242,6 +245,11 @@ public class CoopUIManager : MonoBehaviour
 
     public void Update()
     {
+        if (!_chatPreferenceLoaded)
+        {
+            _chatEnabled = PlayerPrefs.GetInt(ChatPreference, 1) != 0;
+            _chatPreferenceLoaded = true;
+        }
         // UIKit 接管时：自带界面（面板 / 输入 / IME / 聊天浮窗）全部不参与，直接收起来并早退 ——
         // 同一份数据由 UIKit 的声明式页面渲染（见 UI/UIKitIntegration.cs），这里只保留**回退**用途。
         if (UiKitOwnsUi())
@@ -1022,7 +1030,7 @@ public class CoopUIManager : MonoBehaviour
         try
         {
             bool inSession = net.State == SessionState.Hosting || net.State == SessionState.Joined;
-            bool show = inSession; // 聊天面板独立于主菜单：联机会话时始终显示
+            bool show = inSession && _chatEnabled;
             _chatRoot.SetActive(show);
             CoopRuntime.LogSource?.LogInfo($"[UI] RebuildChat show={show} typing={_typing}");
             if (!show) return;
@@ -1152,6 +1160,7 @@ public class CoopUIManager : MonoBehaviour
     /// 顺序关键：必须先 SetActive(true) 再 ActivateInputField（inactive 时激活无效）。</summary>
     private void FocusChat()
     {
+        if (!_chatEnabled) return;
         _typing = true;
         _focusAt = UnityEngine.Time.realtimeSinceStartup; // 记录聚焦时刻（回车提交防抖）
         // ⚠️ 聊天聚焦时关闭主菜单（避免 _blocker 全屏拦截 / LockPlayer 干扰聊天输入）
@@ -1851,8 +1860,20 @@ public class CoopUIManager : MonoBehaviour
             var net = CoopRuntime.Net;
             bool inSession = net != null && (net.State == SessionState.Hosting || net.State == SessionState.Joined);
 
+            // Local overlay preference; never changes another player's chat.
+            if (inSession && kb.f8Key.wasPressedThisFrame)
+            {
+                _chatEnabled = !_chatEnabled;
+                if (!_chatEnabled) StopTyping();
+                PlayerPrefs.SetInt(ChatPreference, _chatEnabled ? 1 : 0);
+                PlayerPrefs.Save();
+                RebuildChat();
+                CoopRuntime.LogSource?.LogInfo($"[UI] Chat {(_chatEnabled ? "ON" : "OFF")} (F8)");
+                return;
+            }
+
             // 回车呼出聊天：未聚焦 + 联机会话时，按回车 → 聚焦聊天输入框（独立于主菜单开关）
-            if (!_typing && inSession)
+            if (!_typing && inSession && _chatEnabled)
             {
                 if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
                 {

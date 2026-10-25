@@ -141,6 +141,11 @@ public static class ReloadSync
         {
             var w = NetProtocol.Begin(MsgType.FireRequest);
             w.Put((byte)idx);
+            // Modernization can set elevation without touching the native dial.
+            // Send the operator's actual firing pose in the same reliable request.
+            w.Put(gun.name ?? "");
+            w.Put(gun.CurrentElevation);
+            CoopRuntime.LogSource?.LogInfo($"[ReloadSync] fire pose send gun='{gun.name}' elevation={gun.CurrentElevation:0.000}");
             net.Transport.Send(net.HostSteamId, NetProtocol.Snapshot(w), true);
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"ReloadSync SendFireRequest: {ex.Message}"); }
@@ -435,11 +440,31 @@ public static class ReloadSync
             var r = new NetDataReader(data);
             r.GetByte(); // 跳过消息类型
             int idx = r.GetByte();
+            string gunName = r.GetString();
+            float elevation = r.GetFloat();
+            if (!float.IsFinite(elevation) || elevation < -10f || elevation > 90f)
+                throw new InvalidOperationException("Invalid requested firing elevation");
             var turret = TurretController.Instance;
             if (turret == null || turret.guns == null) return;
             if (idx < 0 || idx >= turret.guns.Count) return;
             var gun = turret.guns[idx];
-            if (gun != null) gun.RequestFire();
+            // Resolve by name as well: gun ordering is not guaranteed across peers.
+            if (gun == null || gun.name != gunName)
+            {
+                gun = null;
+                foreach (var candidate in turret.guns)
+                    if (candidate != null && candidate.name == gunName) { gun = candidate; break; }
+            }
+            if (gun != null)
+            {
+                if (gun.ChamberedShellBlueprint == null)
+                    throw new InvalidOperationException("Host gun has no chambered shell; fire request rejected");
+                float before = gun.CurrentElevation;
+                gun.SetDesiredElevation(elevation);
+                gun.CurrentElevation = elevation;
+                CoopRuntime.LogSource?.LogInfo($"[ReloadSync] fire pose apply gun='{gun.name}' elevation={before:0.000}->{gun.CurrentElevation:0.000}");
+                gun.RequestFire();
+            }
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"ReloadSync OnFireRequest: {ex.Message}"); }
     }
@@ -664,7 +689,9 @@ public static class ReloadSync
                         }
                         else if (!protectAnim)
                         {
-                            g.Reload.SetState(stateIndex, true); // force：跳过自动推进检查，安全对齐
+                            // Current Unity 6000.3.21 game API has a third argument.
+                            // A received snapshot aligns state; it must not replay loading animations.
+                            g.Reload.SetState(stateIndex, true, false);
                             try { g.Reload.UpdateAllAdvanceButtons(); } catch { } // 刷新按钮 active 表现
                             // ⚠️ 2026-08-15：SetState(force) 只改 currentStateIndex，不触发游戏 OnStateChanged 回调
                             // → 所有依赖装填状态的按钮 active 不刷新（推弹头 "Universal Button Load shell Rammer"、

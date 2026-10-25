@@ -26,6 +26,36 @@ public sealed class ShellSync : ISyncedModule
     private int _scanLog;
     private int _recvDiag;
     private readonly Dictionary<CylinderShellSelector, string> _known = new();
+    private static readonly Dictionary<string, GameObject> ResourcePrefabs = new(StringComparer.Ordinal);
+    private static float _nextResourceScan;
+    private static int _resourceScene = int.MinValue;
+
+    private static GameObject ResolveDefinitionPrefab(string id)
+    {
+        int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
+        if (scene != _resourceScene)
+        {
+            ResourcePrefabs.Clear();
+            _resourceScene = scene;
+            _nextResourceScan = 0f;
+        }
+        string key = id.Trim();
+        if (ResourcePrefabs.TryGetValue(key, out var cached) && cached != null) return cached;
+        if (Time.unscaledTime < _nextResourceScan) return null;
+        _nextResourceScan = Time.unscaledTime + 2f;
+        // Prefab assets are not scene objects. The guest's empty magazine has no
+        // usable design-time templates, but loaded ShellDefinitions own the originals.
+        var definitions = Resources.FindObjectsOfTypeAll<ShellDefinition>();
+        foreach (var definition in definitions)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(definition.ShellId)) continue;
+            var blueprint = definition.BlueprintPrefab;
+            if (blueprint != null && blueprint.gameObject != null)
+                ResourcePrefabs[definition.ShellId.Trim()] = blueprint.gameObject;
+        }
+        CoopRuntime.LogSource?.LogInfo($"[ShellSync] syncfix definition prefab catalogue={ResourcePrefabs.Count}");
+        return ResourcePrefabs.TryGetValue(key, out var result) ? result : null;
+    }
 
     public void Tick(float dt)
     {
@@ -307,7 +337,14 @@ public sealed class ShellSync : ISyncedModule
             foreach (var id in arr)
             {
                 GameObject go = null;
-                if (!string.IsNullOrEmpty(id) && cyl.shellPrefabs != null)
+                if (string.IsNullOrEmpty(id) || id == "NULL")
+                {
+                    list.Add(null); // Preserve empty slots and their exact indices.
+                    continue;
+                }
+                if (id == "?") return; // Unknown host data must not erase ammunition.
+                go = ResolveDefinitionPrefab(id);
+                if (go == null && !string.IsNullOrEmpty(id) && cyl.shellPrefabs != null)
                     foreach (var prefab in cyl.shellPrefabs)
                     {
                         if (prefab == null) continue;
@@ -338,7 +375,9 @@ public sealed class ShellSync : ISyncedModule
                 list.Add(go);
             }
             // 全部匹配到真实 prefab 才应用（避免破坏弹药）；优先官方 ReplaceAllShells
-            bool allMatched = list.Count > 0 && list.TrueForAll(g => g != null);
+            bool allMatched = list.Count == arr.Length && list.Count > 0;
+            for (int i = 0; i < list.Count && allMatched; i++)
+                if (!string.IsNullOrEmpty(arr[i]) && arr[i] != "NULL" && list[i] == null) allMatched = false;
             if (!allMatched)
             {
                 CoopRuntime.LogSource?.LogWarning($"[ShellSync] some prefabs unmatched, skip apply gun='{gunKey}' csv='{csv}'");

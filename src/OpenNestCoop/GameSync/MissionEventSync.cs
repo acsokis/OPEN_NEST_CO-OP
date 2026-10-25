@@ -75,6 +75,10 @@ public sealed class MissionEventSync : ISyncedModule
             r.GetByte(); // 跳过消息类型
             byte ev = r.GetByte();
             bool flag = r.GetByte() != 0;
+            // Automatic outcomes belong to the host; a guest's local timer or
+            // simulation must never fail or complete the shared mission.
+            if (net.IsHost && (ev == EvFinish || ev == EvComplete || ev == EvFailed)) return;
+            if (!net.IsHost && from != net.HostSteamId) return;
             if (net.IsHost)
             {
                 // 主机转发给其他客户端（星型拓扑）

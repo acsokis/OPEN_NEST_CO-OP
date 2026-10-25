@@ -26,6 +26,29 @@ public static class M3EnvSync
     private static int _engineApplyLog;
     private static float _lastEngineStateLog;
     private static bool _lastEngineState = true;
+    private static InterpolatedTransformController _powerLever;
+
+    public static bool EngineSnapshotReady()
+    {
+        var engine = GetEngine();
+        return engine != null && _engineSeenAt >= 0f
+            && Time.unscaledTime - _engineSeenAt >= StartupGuardSeconds;
+    }
+
+    private static InterpolatedTransformController GetPowerLever()
+    {
+        if (_powerLever != null) return _powerLever;
+        foreach (var lever in UnityEngine.Object.FindObjectsOfType<InterpolatedTransformController>(true))
+        {
+            if (lever == null || lever.targetObject == null) continue;
+            if (lever.targetObject.name.IndexOf("Power Lever", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _powerLever = lever;
+                break;
+            }
+        }
+        return _powerLever;
+    }
 
     /// <summary>注册环境值绑定（Plugin.Load 调用；对象在运行时懒解析）。</summary>
     public static void Register()
@@ -87,6 +110,17 @@ public static class M3EnvSync
                 });
             engineBinding.ClientNoSend = true;
             engineBinding.SkipFull = true; // 排除 ControlFull 全量广播，只走状态变化广播
+            // Click events already run the power logic. Align the physical lever
+            // separately so a missed click cannot leave its visual state divergent.
+            CoopSyncRegistry.RegisterFloat("env/power-lever/position",
+                () => GetPowerLever()?.interpolant ?? 0f,
+                value =>
+                {
+                    if (!EngineSnapshotReady()) return;
+                    var lever = GetPowerLever();
+                    if (lever != null && Mathf.Abs(lever.interpolant - value) > 0.01f)
+                        lever.SetInterpolantImmediate(value);
+                }, 0.01f, false).ClientNoSend = true;
 
             // 高压系统：压力健康度 0-1（主机权威，客户端只接收）
             CoopSyncRegistry.RegisterFloat("env/pressure",
@@ -101,6 +135,7 @@ public static class M3EnvSync
                 0.005f, true).ClientNoSend = true;
 
             // 反炮兵倒计时剩余秒（主机权威，客户端对齐）
+            /* CounterBatteryClockSync now transfers the complete timer atomically.
             CoopSyncRegistry.RegisterFloat("env/cbattery/time",
                 () => GetTimer()?.TimeRemaining ?? 0f,
                 v =>
@@ -110,7 +145,7 @@ public static class M3EnvSync
                     try { t.SetTime(v); }
                     catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"M3EnvSync cbtime: {ex.Message}"); }
                 },
-                0.1f, true).ClientNoSend = true;
+                0.1f, false).ClientNoSend = true;
 
             // 反炮兵倒计时运行中（主机权威，客户端只接收）
             CoopSyncRegistry.RegisterBool("env/cbattery/running",
@@ -119,7 +154,7 @@ public static class M3EnvSync
                 {
                     var t = GetTimer();
                     if (t == null) return;
-                    try { if (v) t.StartTimer(); else t.PauseTimer(); }
+                    try { if (v && !t.IsRunning) t.StartTimer(); else if (!v && t.IsRunning) t.PauseTimer(); }
                     catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"M3EnvSync cbrun: {ex.Message}"); }
                 }).ClientNoSend = true;
 
@@ -135,6 +170,7 @@ public static class M3EnvSync
                     try { if (v && !t.IsPermanentlyStopped) t.PermanentlyStop(); }
                     catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"M3EnvSync cbstop: {ex.Message}"); }
                 }).ClientNoSend = true;
+            */
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"M3EnvSync Register: {ex.Message}"); }
     }

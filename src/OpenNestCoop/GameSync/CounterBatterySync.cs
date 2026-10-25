@@ -17,6 +17,7 @@ namespace OpenNestCoop.GameSync;
 public sealed class CounterBatterySync : ISyncedModule
 {
     public static CounterBatterySync Instance;
+    public static bool IsApplyingHostSpawn;
 
     public int MsgType => 103;
 
@@ -69,7 +70,7 @@ public sealed class CounterBatterySync : ISyncedModule
     public void OnPacket(ulong from, byte[] data)
     {
         var net = CoopRuntime.Net;
-        if (net == null || net.IsHost) return; // 仅客户端处理
+        if (net == null || net.IsHost || from != net.HostSteamId) return;
         try
         {
             var r = new NetDataReader(data);
@@ -77,6 +78,14 @@ public sealed class CounterBatterySync : ISyncedModule
             _pendingSeed = r.GetInt();
             _havePending = true;
             _localSeq = 0; // 收到新主机 seed：本地序号重置（对齐主机当前拍照序号）
+            var spawners = UnityEngine.Object.FindObjectsOfType<CounterBatteryCinematicImpactSpawner>();
+            if (spawners != null && spawners.Length == 1)
+            {
+                IsApplyingHostSpawn = true;
+                try { spawners[0].SpawnOne(CounterBatteryTimer.Instance); }
+                finally { IsApplyingHostSpawn = false; }
+            }
+            else CoopRuntime.LogSource?.LogWarning("[CounterBattery] cannot resolve unique host-driven spawner");
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"CounterBatterySync OnPacket: {ex.Message}"); }
     }
@@ -87,6 +96,7 @@ public sealed class CounterBatterySync : ISyncedModule
     public void Reset()
     {
         _seed = 0; _pendingSeed = 0; _havePending = false; _localSeq = 0;
+        IsApplyingHostSpawn = false;
     }
 
     private void BroadcastSeed(NetManager net, int seed)

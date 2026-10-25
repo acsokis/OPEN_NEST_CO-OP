@@ -378,16 +378,21 @@ public static class HarmonyPatches
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"Harmony post request fire: {ex.Message}"); }
     }
 
-    private static void PreSpawnOne(CounterBatteryCinematicImpactSpawner __instance)
+    private static bool PreSpawnOne(CounterBatteryCinematicImpactSpawner __instance)
     {
+        var net = CoopRuntime.Net;
+        if (!OpenNestCoop.Net.AutoJoin.WantNewSync && net != null
+            && net.State == SessionState.Joined && !CounterBatterySync.IsApplyingHostSpawn)
+            return false;
         // A1：脚本化模块事件——反炮兵来袭（脚本模块可订阅 counterbattery）
         try { OpenNestCoop.GameSync.OncMissionBridge.Raise("counterbattery"); } catch { }
         try
         {
-            if (OpenNestCoop.Net.AutoJoin.WantNewSync) { SyncV2.CounterBatterySyncV2.Instance.OnLocalSpawn(); return; }
+            if (OpenNestCoop.Net.AutoJoin.WantNewSync) { SyncV2.CounterBatterySyncV2.Instance.OnLocalSpawn(); return true; }
             CounterBatterySync.Instance?.OnLocalSpawn();
         }
         catch (System.Exception ex) { CoopRuntime.LogSource?.LogWarning($"Harmony PreSpawnOne: {ex.Message}"); }
+        return true;
     }
 
     // ---------------- 着弹/炮弹诊断（2026-08-23）----------------
@@ -717,18 +722,21 @@ public static class HarmonyPatches
 
     private static bool PreMissionFinish()
     {
+        if (!AllowLocalMissionOutcome()) return false;
         NotifyMissionEvent(MissionEventSync.EvFinish, false);
         return true;
     }
 
     private static bool PreMissionComplete(bool __0)
     {
+        if (!AllowLocalMissionOutcome()) return false;
         NotifyMissionEvent(MissionEventSync.EvComplete, __0);
         return true;
     }
 
     private static bool PreMissionFailed(bool __0)
     {
+        if (!AllowLocalMissionOutcome()) return false;
         NotifyMissionEvent(MissionEventSync.EvFailed, __0);
         return true;
     }
@@ -737,6 +745,13 @@ public static class HarmonyPatches
     {
         NotifyMissionEvent(MissionEventSync.EvReload, false);
         return true;
+    }
+
+    private static bool AllowLocalMissionOutcome()
+    {
+        if (OpenNestCoop.Net.AutoJoin.WantNewSync) return true;
+        var net = CoopRuntime.Net;
+        return net == null || net.IsHost || net.State != SessionState.Joined || MissionEventSync.IsApplying;
     }
 
     private static bool PreMissionReturnMap()

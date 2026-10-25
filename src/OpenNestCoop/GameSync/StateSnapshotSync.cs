@@ -29,7 +29,7 @@ public sealed class StateSnapshotSync : ISyncedModule
     // 且打字机已改为 EvPrint/EvState 驱动（不再依赖快照重发），extraTypes={31} 已无必要。
     // 中途加入的装填对齐仍由主机 OnLateJoin → ReloadSync.SendFullStateTo（pending 重试）负责。
     [System.Runtime.CompilerServices.ModuleInitializer]
-    internal static void SelfRegister() => CoopSyncRegistry.PendingRegister(false, () => new StateSnapshotSync());
+    internal static void SelfRegister() => CoopSyncRegistry.PendingRegister(false, () => new StateSnapshotSync(), null, null, 31);
 
     private sealed class Provider
     {
@@ -65,6 +65,9 @@ public sealed class StateSnapshotSync : ISyncedModule
 
     /// <summary>主机：新成员加入，收集所有模块当前状态 → 打包成 StateSnapshot 单播。</summary>
     public void OnLateJoin(ulong steamId)
+        => SendSnapshot(steamId, false);
+
+    private void SendSnapshot(ulong steamId, bool mapOnly)
     {
         var net = CoopRuntime.Net;
         if (net == null || !net.IsHost || steamId == 0) return;
@@ -75,6 +78,7 @@ public sealed class StateSnapshotSync : ISyncedModule
             var payloads = new List<(string name, byte[] data)>();
             foreach (var p in _providers)
             {
+                if (mapOnly && p.Name != "entity" && p.Name != "maptoken" && p.Name != "mapmarker") continue;
                 try
                 {
                     var d = p.Build();
@@ -110,14 +114,14 @@ public sealed class StateSnapshotSync : ISyncedModule
                 if (net.IsHost)
                 {
                     CoopRuntime.LogSource?.LogInfo($"[StateSnapshot] received resend request -> {from}");
-                    OnLateJoin(from);
+                    SendSnapshot(from, true);
                     // 装填快照单独发（SetState 安全对齐按钮）：此时新成员已进场景，能正确应用。
                     // 若场景仍未就绪，SendFullStateTo 内部入 pending，Tick 里重试直到成功。
-                    try { ReloadSync.SendFullStateTo(from); }
-                    catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"[StateSnapshot] ReloadSync resend: {ex.Message}"); }
+                    // Map readiness requests must not replay loading states.
                 }
                 return;
             }
+            if (net.IsHost || from != net.HostSteamId) return;
             int n = r.GetByte();
             for (int i = 0; i < n; i++)
             {

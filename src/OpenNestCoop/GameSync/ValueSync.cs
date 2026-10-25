@@ -379,7 +379,9 @@ public static class ValueSync
                 b.ForceNext = false;
                 MarkHost(b, cur);
                 // 首次（!HSet）只记录不上行——开局不广播（避免误读值覆盖对端）；之后变化才广播
-                if (!first && schanged)
+                bool readyEngineHeartbeat = heartbeat && b.Id == "env/engine/running"
+                    && M3EnvSync.EngineSnapshotReady();
+                if ((!first && schanged) || readyEngineHeartbeat)
                 {
                     SendState(net, b, cur, false); // 状态变化：reliable（丢了永久不同步）
                 }

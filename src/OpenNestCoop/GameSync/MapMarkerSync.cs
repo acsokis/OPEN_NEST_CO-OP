@@ -29,6 +29,7 @@ public sealed class MapMarkerSync : ISyncedModule
     }
     private int _recvLog;
     private static bool _hooked;
+    private static bool _applyingFinalizedEvent;
     private static float _lastDragSend;
     private static readonly Dictionary<string, GameObject> _markers = new();
     // 远端拖拽中的临时 marker（kind -> GameObject）
@@ -99,6 +100,7 @@ public sealed class MapMarkerSync : ISyncedModule
     /// <summary>本端在地图桌上放置/画线完成 → 广播。</summary>
     private static void OnMarkerFinalizedLocal(MapMarkerLineUI marker)
     {
+        if (_applyingFinalizedEvent) return;
         var net = CoopRuntime.Net;
         if (net == null || marker == null) return;
         if (net.State != SessionState.Hosting && net.State != SessionState.Joined) return;
@@ -345,6 +347,13 @@ public sealed class MapMarkerSync : ISyncedModule
             {
                 try { placer.placedMarkers.Add(ui); } catch { }
             }
+            // Placer normally publishes this after a player finishes a line.
+            // FinalizePlacement alone does not notify MarkerNoteLogger, so a
+            // remote line previously had no matching Bearing / Distance note.
+            // Store the network ID first, then notify once without re-sending.
+            _applyingFinalizedEvent = true;
+            try { MapMarkerPlacer.OnMarkerFinalized?.Invoke(ui); }
+            finally { _applyingFinalizedEvent = false; }
             CoopRuntime.LogSource?.LogInfo($"[MapMarkerSync] applied kind={kind} id={id}");
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"MapMarkerSync ApplyMarker: {ex.Message}"); }
@@ -354,7 +363,9 @@ public sealed class MapMarkerSync : ISyncedModule
     {
         try
         {
-            var selectors = UnityEngine.Object.FindObjectsOfType<ClipboardToolSelector>();
+            // The clipboard can be hidden while another player draws. Its tool
+            // slots still own the correct prefab and must remain discoverable.
+            var selectors = UnityEngine.Object.FindObjectsOfType<ClipboardToolSelector>(true);
             if (selectors != null)
                 foreach (var sel in selectors)
                 {
@@ -366,7 +377,7 @@ public sealed class MapMarkerSync : ISyncedModule
                         if (CleanName(slot.markerPrefab.name) == kind) return slot.markerPrefab;
                     }
                 }
-            var slots = UnityEngine.Object.FindObjectsOfType<ClipboardToolSlot>();
+            var slots = UnityEngine.Resources.FindObjectsOfTypeAll<ClipboardToolSlot>();
             if (slots != null)
                 foreach (var slot in slots)
                 {
@@ -389,10 +400,15 @@ public sealed class MapMarkerSync : ISyncedModule
         try
         {
             if (_markers.Count == 0) return null;
+            var valid = new List<KeyValuePair<string, GameObject>>();
+            foreach (var entry in _markers)
+                if (entry.Value != null && entry.Value.GetComponent<MapMarkerLineUI>() != null)
+                    valid.Add(entry);
+            if (valid.Count == 0) return null;
             var w = NetProtocol.Begin((MsgType)107);
-            w.Put((byte)Math.Min(_markers.Count, 255));
+            w.Put((byte)Math.Min(valid.Count, 255));
             int written = 0;
-            foreach (var kv in _markers)
+            foreach (var kv in valid)
             {
                 if (written >= 255) break;
                 var go = kv.Value;

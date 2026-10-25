@@ -510,6 +510,26 @@ public static class ControlSync
                     // 从 _registeredPaths 移除 → 每次 Rescan 重复注册 + binding 反复删建 → 同步不稳定（方向角失效根因）
                     current.Add(rotId);
                     current.Add(rotVelId);
+                    if (t.guns != null)
+                    {
+                        foreach (var gun in t.guns)
+                        {
+                            if (gun == null) continue;
+                            var capturedGun = gun;
+                            string elevationId = "__gun/" + gun.name + "/elevation";
+                            current.Add(elevationId);
+                            if (ValueSync.Has(elevationId)) continue;
+                            ValueSync.AddFloat(elevationId,
+                                () => capturedGun.DesiredElevationAngle,
+                                value =>
+                                {
+                                    if (float.IsFinite(value) && value >= -10f && value <= 90f)
+                                        capturedGun.SetDesiredElevation(value);
+                                }, 0.01f, false);
+                            _registeredPaths.Add(elevationId);
+                            CoopRuntime.LogSource?.LogInfo($"[ControlSync] direct gun elevation registered '{elevationId}'");
+                        }
+                    }
                     if (ValueSync.Has(rotId) && ValueSync.Has(rotVelId)) continue;
                     // TurretController 无 OnEnable override → 必然靠 Rescan 保底，运行期保底如实记 MISS
                     if (detectMiss && !_onEnablePaths.Contains(rotId)) LogOnEnableMiss("Turret", rotId);

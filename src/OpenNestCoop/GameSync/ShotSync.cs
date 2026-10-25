@@ -108,6 +108,12 @@ public sealed class ShotSync : ISyncedModule
                 };
             }
             catch { return; } // 字段读不到（异常拦截）→ 本发不同步
+            if (!float.IsFinite(local.Dur) || !float.IsFinite(local.Dist)
+                || local.Dur <= 0f || local.Dist <= 0f)
+            {
+                CoopRuntime.LogSource?.LogWarning($"[ShotSync] rejected invalid local trajectory shell='{local.Shell}' dur={local.Dur} dist={local.Dist}");
+                return;
+            }
 
             if (net.IsHost)
             {
@@ -169,6 +175,12 @@ public sealed class ShotSync : ISyncedModule
                 At = Time.time,
             };
 
+            if (!float.IsFinite(s.Dur) || !float.IsFinite(s.Dist) || s.Dur <= 0f || s.Dist <= 0f)
+            {
+                CoopRuntime.LogSource?.LogWarning("[ShotSync] invalid host packet rejected before projectile pairing");
+                return;
+            }
+
             // 本地炮弹已创建（常见：本机复现开火时事件与参数几乎同时到）→ 立即配对
             int best = -1;
             float bd = float.MaxValue;
@@ -199,6 +211,11 @@ public sealed class ShotSync : ISyncedModule
     private void Apply(ShellVisual sv, Shot s, string via)
     {
         if (sv == null) return;
+        if (!float.IsFinite(s.Dur) || !float.IsFinite(s.Dist) || s.Dur <= 0f || s.Dist <= 0f)
+        {
+            CoopRuntime.LogSource?.LogWarning("[ShotSync] invalid host trajectory rejected; local projectile retained");
+            return;
+        }
         string own = "?";
         try
         {
@@ -207,9 +224,13 @@ public sealed class ShotSync : ISyncedModule
             sv.targetLocalPos = new Vector2(s.Target.x, s.Target.y);
             sv.travelTime = s.Dur;
             sv.totalPathDistance = s.Dist;
-            double now = Time.time;
-            sv.startedAt = now;
-            sv.endsAt = now + s.Dur;
+            // Initialize owns the native flight clock. Time.time is scene-scaled
+            // and is not guaranteed to use the same origin as that clock.
+            // Preserve its start timestamp when applying authoritative geometry.
+            double nativeStart = sv.startedAt;
+            double previousEnd = sv.endsAt;
+            sv.endsAt = nativeStart + s.Dur;
+            CoopRuntime.LogSource?.LogInfo($"[ShotSync] native clock retained start={nativeStart:0.000} oldEnd={previousEnd:0.000} end={sv.endsAt:0.000} scaledNow={Time.time:0.000} realtimeNow={Time.realtimeSinceStartup:0.000}");
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"ShotSync Apply: {ex.Message}"); }
         _nRecv++;

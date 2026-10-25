@@ -55,6 +55,7 @@ public sealed class MapTokenSync : ISyncedModule
     /// childIndex，否则击杀标记在两端数量不同会导致后续 childIndex 偏移 → id 不同 → 单向/双向匹配失败。
     /// static：接收端 FindTokenById 也用（每帧 Tick 重建，两端场景布局一致 → 唯一性判断一致）。</summary>
     private static readonly Dictionary<string, int> _nameCount = new();
+    private static byte[] _pendingSnapshot;
 
     /// <summary>⚠️ 2026-08-26 帧性能：Draggable Surface 缓存（场景切换/丢失刷新，避免每 tick 全场景 Find）。</summary>
     private GameObject GetMap()
@@ -81,6 +82,12 @@ public sealed class MapTokenSync : ISyncedModule
         {
             var map = GetMap();
             if (map == null) return;
+            if (_pendingSnapshot != null)
+            {
+                var snapshot = _pendingSnapshot;
+                _pendingSnapshot = null;
+                ApplyMapTokenSnapshot(snapshot);
+            }
             // 统计名字@路径出现次数（唯一性判断，供 TokenId 决定是否加 childIndex）
             BuildNameCount(map);
             // 一次性：打印 token 结构（组件+子对象+文本，定位编号所在）
@@ -198,6 +205,10 @@ public sealed class MapTokenSync : ISyncedModule
                 // ⚠️ 2026-08-26 争抢修复：远端控制中的 token 本端不广播（除非本端重新拖拽）。游戏本地物理
                 // （DraggableItem/MapPiece3D）会把应用后的位置改回，跳过才不互推。
                 bool dragging = IsLocalDragging(t);
+                // Any peer can take over a token by grabbing it. Clear the
+                // previous remote owner before the release branch, otherwise
+                // the final drop is skipped by the remote-controlled guard.
+                if (dragging) _remote.Remove(id);
                 if (!dragging && _remote.Contains(id))
                 {
                     _wasDragging[id] = false;
@@ -211,6 +222,15 @@ public sealed class MapTokenSync : ISyncedModule
                     _remote.Remove(id);
                     _lastSig[id] = SigOf(t);
                     (changed ??= new List<string>()).Add(id);
+                    continue;
+                }
+                // Automatic placement (including newly generated recon photos)
+                // belongs to the host. A guest may publish only a player drag
+                // or its final release, handled above. Otherwise delayed local
+                // generation can overwrite the host's established map layout.
+                if (!net.IsHost && !dragging)
+                {
+                    _lastSig[id] = SigOf(t);
                     continue;
                 }
                 // ⚠️ 2026-08-26：铁巢 token（Player Turret Piece）是**可拖拽标记**，需同步（拖拽后两端一致）；
@@ -232,7 +252,7 @@ public sealed class MapTokenSync : ISyncedModule
                 // ⚠️ 2026-08-26 照片例外：照片 token（MapToken_Recon）**非拖拽也广播**——游戏自动生成（非玩家
                 // 拖），生成时方向/位置需同步（"照片方向不同步"根因：非拖拽不广播跳过照片 → 方向两端不同）。
                 // 照片静止后变化检测不触发 → 不持续广播（区别于 MapToken_Artillery 持续动态）。
-                if (!forceFull && !dragging && !IsPhoto(t))
+                if (!forceFull && !dragging && !IsPhoto(t) && !net.IsHost)
                 {
                     _lastSig[id] = SigOf(t);
                     continue;
@@ -535,7 +555,7 @@ public sealed class MapTokenSync : ISyncedModule
 
     public void OnSessionStarted() { }
     public void OnSessionEnded() { Reset(); }
-    public void Reset() { _timer = 0f; _lastSig.Clear(); _applying = false; _remote.Clear(); _wasDragging.Clear(); _fullOnce = false; }
+    public void Reset() { _timer = 0f; _lastSig.Clear(); _applying = false; _remote.Clear(); _wasDragging.Clear(); _fullOnce = false; _pendingSnapshot = null; }
 
     // ---------------- 中途加入快照（方案 B） ----------------
 
@@ -586,6 +606,13 @@ public sealed class MapTokenSync : ISyncedModule
     {
         try
         {
+            var readyMap = GameObject.Find("Draggable Surface");
+            if (readyMap == null || readyMap.transform.childCount == 0)
+            {
+                _pendingSnapshot = data;
+                return;
+            }
+            BuildNameCount(readyMap);
             var r = new NetDataReader(data);
             r.GetByte(); // 跳过消息类型
             int n = r.GetByte();
