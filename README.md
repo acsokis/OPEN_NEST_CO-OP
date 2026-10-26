@@ -7,6 +7,10 @@
 
 **Multiplayer co-op mod for [Iron Nest: Heavy Turret Simulator](https://store.steampowered.com/app/2950790)** (Unity 6 / IL2CPP).
 
+Fork history: [CHANGELOG.md](CHANGELOG.md), from the inherited upstream commit
+through syncfix.11. [Current validation](docs/SYNCFIX_11_TEST_HU.md) distinguishes
+implemented changes from automated checks and native gameplay confirmation.
+
 Play as a crew inside a giant fortress turret — calibrate machinery, load shells,
 man the fire-control computer, brew coffee — together with friends over Steam.
 

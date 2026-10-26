@@ -7,6 +7,9 @@ Jager2251's separate Iron Nest Co-op mod.
 
 Current experimental test version: **0.2.1-syncfix.11** (MelonLoader).
 
+See the [complete fork changelog](../CHANGELOG.md) for the changes since upstream
+commit `f49a188`, grouped by committed repair set and release.
+
 Syncfix.11 selects the host's exact native MissionID instead of the first card
 sharing its Unity scene. The tester confirmed matching background maps in two
 complete local game instances on 2026-10-26. It also implements acknowledged
@@ -31,7 +34,8 @@ are resolved.
 
 Syncfix.10.1 corrects stale runtime/network version labels found during startup
 validation. MelonInfo now uses NetConfig.Version, and packaging rejects a
-runtime/package version mismatch. Use the syncfix.10.1 release rather than .10.
+runtime/package version mismatch. At that point .10.1 superseded .10; the current
+release is .11.
 
 Syncfix.10 adds a version-matched optional Modernization model bridge for intel,
 map selection/coordinates/measurements, native notes, radar contacts, fire plans

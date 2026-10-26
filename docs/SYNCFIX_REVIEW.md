@@ -1,5 +1,11 @@
 # Experimental MelonLoader interoperability changes
 
+This document retains the earlier .7-.10 implementation review and historical
+test counts. For the complete history through .11, read the
+[fork changelog](../CHANGELOG.md). For current evidence and unresolved native
+paths, read [syncfix.11 validation](SYNCFIX_11_TEST_HU.md). Historical paragraphs
+below must not be treated as current proof that a reported issue is resolved.
+
 Contribution prepared for Gabor Kocsis (@acsokis), with AI-assisted implementation.
 Based on upstream commit f49a18863adb69b1401689843d08015e2d8eec8a.
 The upstream AGPL-3.0 license continues to apply.
