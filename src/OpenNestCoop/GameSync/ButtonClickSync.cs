@@ -19,7 +19,7 @@ public sealed class ButtonClickSync : ISyncedModule
 {
     public int MsgType => 118;
     private static readonly string[] Keywords =
-        { "Lever", "Rammer", "Hatch", "Primer", "Confirm", "Breech",
+        { "Door", "Gate", "Stair", "Ladder", "Lever", "Rammer", "Hatch", "Primer", "Confirm", "Breech",
           "Power", "Reset", "Delete", "Measure", "Kill", "Lock", "Elevation", "Range", "Damage",
           "Link", "Firing", "Trigger", "Launch", "Lanyard", "Fire", "Safety", "Safty", "Switch", "Arm",
           "Starter", "Crank",

@@ -60,6 +60,32 @@ The local-only test was closed from the main menu and normal Steam launch restor
 
 ## Outstanding validation and limitations
 
+Syncfix.10 adds `ModernizationStateSync`, a bounded compressed data-model bridge
+using only an installed assembly's expected types and matching module MVIDs.
+Host revisions serialize intel/selection/moving-contact, notes, radar and fire
+plan/pending-job edits; stale proposals receive the current authoritative value.
+Automatic queue execution, auto-port controls and native radar scans are guarded
+on guests. Host FCS access is a session-only mirror. UI open/close/focus remains
+local. This is interoperability code, not copied Modernization source.
+
+`WorldControlsSync` publishes settled door/hatch and light master/switch/manual
+states; clicks remain bidirectional. Periodic corrections are idempotent, scoped
+to the mission scene, and do not replay random ambient flicker.
+Chat visibility uses a new preference key with a false default.
+
+The syncfix.10 build succeeds with zero errors (76 existing/compiler/network
+warnings). 49 checks cover codecs, revision conflicts, lifecycle and authority;
+8 checks load real local Modernization types without starting Unity. These are
+data tests, not two-player simulation. The installer/checker also needs fixture
+and local deployment checks before distribution.
+
+The optional reflection contract can change between Modernization releases.
+Safe/pairing/chip interactions and every private UI command have not been
+implemented or proven by the data bridge. Check F1/F2/F3 projections, selection,
+measurement/note edits, undo/redo, both-player simultaneous edits, queue
+start/pause/auto-fire and host-only physical effects in a real two-PC session.
+Do not infer support for untested functions from matching model files.
+
 - Two-PC end-to-end testing is incomplete; earlier test builds had major failures.
 - Confirm each drawing tool, measurement label/note, late join, and reconnect.
 - Native map restore, late join, and generated photo restoration need two-PC

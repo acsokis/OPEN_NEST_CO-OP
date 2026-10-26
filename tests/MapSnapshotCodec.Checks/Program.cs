@@ -52,4 +52,5 @@ Check(SessionAuthority.LeaveBeforeLocalNavigation(false, true, false));
 Check(!SessionAuthority.LeaveBeforeLocalNavigation(false, true, true)); // applying host event keeps session
 Check(!SessionAuthority.LeaveBeforeLocalNavigation(true, true, false)); // host stays in charge
 Check(!SessionAuthority.LeaveBeforeLocalNavigation(false, false, false)); // single player unchanged
-Console.WriteLine($"{passed} snapshot, card lifecycle, and mission authority checks passed");
+passed += ManagedChecks.Run(args);
+Console.WriteLine($"{passed} snapshot, card lifecycle, authority and managed-state checks passed");

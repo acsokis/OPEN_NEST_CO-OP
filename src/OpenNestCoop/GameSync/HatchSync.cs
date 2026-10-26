@@ -36,7 +36,7 @@ public sealed class HatchSync : ISyncedModule
         _timer += dt;
         if (_timer < Interval) return;
         _timer = 0f;
-        if (net.State != SessionState.Hosting && net.State != SessionState.Joined) return;
+        if (net.State != SessionState.Hosting || !net.IsHost) return;
         try
         {
             var tog = UnityEngine.Object.FindObjectsOfType<AnimatorBoolToggler>();
@@ -125,7 +125,7 @@ public sealed class HatchSync : ISyncedModule
     public void OnPacket(ulong from, byte[] data)
     {
         var net = CoopRuntime.Net;
-        if (net == null) return;
+        if (net == null || net.IsHost || from != net.HostSteamId) return;
         try
         {
             var r = new NetDataReader(data);

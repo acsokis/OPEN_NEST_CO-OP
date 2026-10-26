@@ -36,9 +36,9 @@ public class CoopUIManager : MonoBehaviour
 
     // 独立聊天浮动面板（屏幕左中，主菜单之外常驻；联机会话时显示）
     private GameObject _chatRoot;
-    private bool _chatEnabled = true;
+    private bool _chatEnabled = false;
     private bool _chatPreferenceLoaded;
-    private const string ChatPreference = "OpenNestCoop.ChatVisible";
+    private const string ChatPreference = "OpenNestCoop.ChatVisible.v2";
     private RectTransform _chatContent;
     private Image _chatBg;              // 面板背景（未聚焦时隐藏）
     private GameObject _chatHintBar;    // 未聚焦时的小提示条（"回车聊天"）
@@ -247,7 +247,7 @@ public class CoopUIManager : MonoBehaviour
     {
         if (!_chatPreferenceLoaded)
         {
-            _chatEnabled = PlayerPrefs.GetInt(ChatPreference, 1) != 0;
+            _chatEnabled = PlayerPrefs.GetInt(ChatPreference, 0) != 0;
             _chatPreferenceLoaded = true;
         }
         // UIKit 接管时：自带界面（面板 / 输入 / IME / 聊天浮窗）全部不参与，直接收起来并早退 ——

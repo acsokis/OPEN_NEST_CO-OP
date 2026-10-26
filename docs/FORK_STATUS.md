@@ -5,7 +5,28 @@ contributed by Gabor Kocsis (@acsokis) with AI-assisted implementation.
 The upstream authors and AGPL-3.0 license are preserved. It is not a port of
 Jager2251's separate Iron Nest Co-op mod.
 
-Current local test version: **0.2.1-syncfix.9**.
+Current experimental test version: **0.2.1-syncfix.10**.
+
+Syncfix.10 adds a version-matched optional Modernization model bridge for intel,
+map selection/coordinates/measurements, native notes, radar contacts, fire plans
+and pending automatic jobs. Automatic purchases/firing and radar scanning run on
+the host; guests propose edits and receive authoritative operational state.
+Host-earned FCS access is mirrored for the session without changing preferences
+or granting a permanent unlock. Door and lamp settled states receive host
+corrections. Chat starts hidden (F8 toggles it).
+
+The installer writes `IRON_NEST_ELLENORZES.cmd` into the actual game directory.
+It compares co-op/dependency and installed Modernization hashes with the package
+baseline, detects duplicate co-op assemblies and reports another running copy.
+An install with missing/mismatched mods is explicitly marked incomplete.
+Hashes prove file identity; they do not prove two-PC gameplay correctness.
+
+Validation: 49 standalone checks passed, including round trips using the locally
+installed Modernization model types; MelonLoader build passed with zero errors.
+The private model bridge requires the same Modernization assembly MVID on both
+machines and logs unsupported contracts instead of claiming synchronization.
+Physical safe/chip/pairing interactions and every private F1-F3 command are not
+covered by this data bridge. Multi-player runtime tests remain mandatory.
 
 Syncfix.9 adds scene-scoped calculator-card deletion and skips identical native
 state restores, preventing closed cards/views from being reopened by heartbeats.

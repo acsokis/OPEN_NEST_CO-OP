@@ -8,5 +8,7 @@
     <Compile Include="../../src/OpenNestCoop/GameSync/MapSnapshotCodec.cs" Link="MapSnapshotCodec.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/CardReplicationState.cs" Link="CardReplicationState.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/SessionAuthority.cs" Link="SessionAuthority.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/ManagedStateCodec.cs" Link="ManagedStateCodec.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/SharedDocumentStore.cs" Link="SharedDocumentStore.cs" />
   </ItemGroup>
 </Project>

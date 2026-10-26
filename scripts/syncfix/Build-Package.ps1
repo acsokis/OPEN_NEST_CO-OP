@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$GamePath)
+param([Parameter(Mandatory=$true)][string]$GamePath,[switch]$IncludeCatMods)
 $ErrorActionPreference='Stop'
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $changes=git -C $repo status --porcelain
@@ -9,7 +9,9 @@ if($LASTEXITCODE){throw 'Build failed'}
 $bin=Join-Path $repo 'src\OpenNestCoop.MelonMod\bin\Debug\net6.0'
 $binary=Join-Path $bin 'OpenNestCoop.MelonMod.dll'
 $version=(Get-Item $binary).VersionInfo.ProductVersion
-$stage=Join-Path $repo ('artifacts\OpenNestCoop-'+$version)
+$flavor=if($IncludeCatMods){'-private-friend'}else{''}
+$stage=Join-Path $repo ('artifacts\OpenNestCoop-'+$version+$flavor)
+if(Test-Path -LiteralPath $stage){throw ('Generated staging directory already exists; use a fresh checkout/output: '+$stage)}
 New-Item -ItemType Directory (Join-Path $stage 'payload\Mods'),(Join-Path $stage 'payload\UserLibs') -Force|Out-Null
 Copy-Item $binary (Join-Path $stage 'payload\Mods') -Force
 foreach($name in @('LiteNetLib.dll','SharpGLTF.Core.dll','SharpGLTF.Runtime.dll')){
@@ -18,6 +20,25 @@ foreach($name in @('LiteNetLib.dll','SharpGLTF.Core.dll','SharpGLTF.Runtime.dll'
 $api=Join-Path $repo 'src\OpenNestUIKit.API\bin\Debug\net6.0\OpenNestUIKit.API.dll'
 Copy-Item $api (Join-Path $stage 'payload\UserLibs') -Force
 $payload=Join-Path $stage 'payload'
+if($IncludeCatMods){
+ foreach($name in @('IronNestCatCollision.dll','IronNestHighTide.dll')){
+  Copy-Item -LiteralPath (Join-Path $GamePath ('Mods\'+$name)) -Destination (Join-Path $payload 'Mods') -Force
+ }
+}
+# Fingerprints are metadata, not redistributed third-party implementations.
+$expected=@(Get-ChildItem -LiteralPath (Join-Path $GamePath 'Mods') -File -Filter 'IronNest*.dll'|ForEach-Object{
+ [pscustomobject]@{Path=('Mods\'+$_.Name);SHA256=(Get-FileHash -LiteralPath $_.FullName).Hash}
+})
+$expected+=Get-ChildItem -LiteralPath $payload -File -Recurse|ForEach-Object{
+ [pscustomobject]@{Path=$_.FullName.Substring($payload.Length+1);SHA256=(Get-FileHash -LiteralPath $_.FullName).Hash}
+}
+$expected=$expected|Group-Object Path|ForEach-Object{$_.Group[-1]}
+$checkDir=Join-Path $payload 'OpenNestUpdate'
+New-Item -ItemType Directory $checkDir -Force|Out-Null
+$expected|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $checkDir 'ExpectedMods.json') -Encoding UTF8
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Check-Install.ps1') -Destination $checkDir -Force
+$checkCmd='@echo off'+"`r`n"+'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0OpenNestUpdate\Check-Install.ps1" -GamePath "%~dp0." -ReportPath "%~dp0IRON_NEST_ELLENORZES.txt"'+"`r`n"+'pause'+"`r`n"
+[IO.File]::WriteAllText((Join-Path $payload 'IRON_NEST_ELLENORZES.cmd'),$checkCmd,[Text.Encoding]::ASCII)
 Get-ChildItem $payload -Recurse -File|ForEach-Object{
  [pscustomobject]@{Path=$_.FullName.Substring($payload.Length+1);SHA256=(Get-FileHash $_.FullName).Hash}
 }|ConvertTo-Json|Set-Content (Join-Path $stage 'SHA256.json') -Encoding UTF8
