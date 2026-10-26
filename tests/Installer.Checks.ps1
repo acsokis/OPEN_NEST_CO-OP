@@ -11,7 +11,7 @@ $expectedPath=Join-Path $package 'payload\OpenNestUpdate\ExpectedMods.json'
 # The fixture tests our loader/dependency update; external Modernization binaries
 # are neither needed nor copied. Actual game packaging retains all fingerprints.
 $all=Get-Content -LiteralPath $expectedPath -Raw|ConvertFrom-Json
-$expected=@($all|Where-Object Path -NotLike 'Mods\IronNest*.dll')
+$expected=@($all|Where-Object { $_.Path -like 'Mods\OpenNestCoop*' -or $_.Path -like 'UserLibs\*' })
 $expected|ConvertTo-Json|Set-Content -LiteralPath $expectedPath -Encoding UTF8
 $payload=Join-Path $package 'payload'
 Get-ChildItem -LiteralPath $payload -Recurse -File|ForEach-Object{

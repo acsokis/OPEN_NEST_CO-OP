@@ -32,6 +32,9 @@ $expected=@(Get-ChildItem -LiteralPath (Join-Path $GamePath 'Mods') -File -Filte
 $expected+=Get-ChildItem -LiteralPath $payload -File -Recurse|ForEach-Object{
  [pscustomobject]@{Path=$_.FullName.Substring($payload.Length+1);SHA256=(Get-FileHash -LiteralPath $_.FullName).Hash}
 }
+foreach($relative in @('Iron Nest Heavy Turret Simulator.exe','GameAssembly.dll','MelonLoader\net6\MelonLoader.dll')){
+ $expected+=[pscustomobject]@{Path=$relative;SHA256=(Get-FileHash -LiteralPath (Join-Path $GamePath $relative)).Hash}
+}
 $expected=$expected|Group-Object Path|ForEach-Object{$_.Group[-1]}
 $checkDir=Join-Path $payload 'OpenNestUpdate'
 New-Item -ItemType Directory $checkDir -Force|Out-Null
