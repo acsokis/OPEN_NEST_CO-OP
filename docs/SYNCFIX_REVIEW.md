@@ -73,11 +73,14 @@ states; clicks remain bidirectional. Periodic corrections are idempotent, scoped
 to the mission scene, and do not replay random ambient flicker.
 Chat visibility uses a new preference key with a false default.
 
-The syncfix.10 build succeeds with zero errors (76 existing/compiler/network
+The syncfix.10 build succeeds with zero errors (78 existing/compiler/network
 warnings). 49 checks cover codecs, revision conflicts, lifecycle and authority;
 8 checks load real local Modernization types without starting Unity. These are
-data tests, not two-player simulation. The installer/checker also needs fixture
-and local deployment checks before distribution.
+data tests, not two-player simulation. An isolated installer fixture verifies
+replacement/backup of renamed co-op assemblies, missing dependencies, duplicate
+assemblies, wrong hashes and preservation of a separate HDR sentinel. Manifest
+schema validation rejects incomplete entries rather than comparing empty hashes.
+Local deployment/startup and two-PC gameplay are separate validation stages.
 
 The optional reflection contract can change between Modernization releases.
 Safe/pairing/chip interactions and every private UI command have not been

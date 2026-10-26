@@ -11,12 +11,14 @@ $lines.Add('Game: '+$game)
 if(-not(Test-Path -LiteralPath (Join-Path $game 'Iron Nest Heavy Turret Simulator.exe'))){$issues.Add('Nem a jatek EXE-jenek mappaja: '+$game)}
 if(-not(Test-Path -LiteralPath (Join-Path $game 'MelonLoader\net6\MelonLoader.dll'))){$issues.Add('Hianyzik a MelonLoader net6 betolto')}
 if((Test-Path -LiteralPath (Join-Path $game 'BepInEx\core')) -and (Test-Path -LiteralPath (Join-Path $game 'winhttp.dll'))){$issues.Add('Aktiv BepInEx is van a MelonLoader mellett; ellenorizendo betoltoutkozes')}
-$expected=@(Get-Content -LiteralPath $ExpectedManifest -Raw|ConvertFrom-Json)
+$expected=Get-Content -LiteralPath $ExpectedManifest -Raw|ConvertFrom-Json
+if(-not $expected){throw 'Ures ellenorzesi jegyzek'}
 foreach($item in $expected){
+ if(-not $item.Path -or [string]$item.SHA256 -notmatch '^[a-fA-F0-9]{64}$'){throw 'Hibas ellenorzesi jegyzek: utvonal/SHA256 hianyzik'}
  $relative=[string]$item.Path
  $path=[IO.Path]::GetFullPath((Join-Path $game $relative))
  if(-not $path.StartsWith($game+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Hibas ellenorzesi jegyzek'}
- if(-not(Test-Path -LiteralPath $path)){$issues.Add('HIANYZIK: '+$relative);continue}
+ if(-not(Test-Path -LiteralPath $path -PathType Leaf)){$issues.Add('HIANYZIK: '+$relative);continue}
  $actual=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
  $version=(Get-Item -LiteralPath $path).VersionInfo.ProductVersion
  $lines.Add($relative+' | '+$version+' | SHA256='+$actual)
