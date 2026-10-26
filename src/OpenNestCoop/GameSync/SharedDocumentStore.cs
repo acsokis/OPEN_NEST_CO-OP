@@ -18,7 +18,7 @@ internal sealed class SharedDocumentStore
     internal Entry Set(string key, string payload)
     {
         var previous = Get(key);
-        if (previous.Payload == payload) return previous;
+        if (_entries.ContainsKey(key) && previous.Payload == payload) return previous;
         return _entries[key] = new Entry(++_clock, payload);
     }
     internal bool Propose(string key, long expected, string payload)

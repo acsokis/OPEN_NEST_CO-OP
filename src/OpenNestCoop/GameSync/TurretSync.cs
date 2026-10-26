@@ -28,14 +28,7 @@ public static class TurretSync
         if (turret == null || turret.guns == null) return;
         try
         {
-            int idx = -1;
-            for (int i = 0; i < turret.guns.Count; i++)
-            {
-                var g = turret.guns[i];
-                // ⚠️ IL2CPP interop：不能 `g == gun`（包装引用比较不可靠），必须按底层 Pointer 匹配
-                // （与 ReloadSync.IndexOf 一致；此前用 == 导致 idx 永远找不到 → GunFire 从不广播 → 客机不开火）。
-                if (g != null && gun != null && g.Pointer == gun.Pointer) { idx = i; break; }
-            }
+            int idx = GunRouting.IndexOf(gun);
             if (idx < 0)
             {
                 CoopRuntime.LogSource?.LogWarning($"[TurretSync] OnLocalGunFired: gun '{gun?.name}' not found in turret.guns ({turret.guns.Count})");
@@ -68,12 +61,13 @@ public static class TurretSync
                 CoopRuntime.LogSource?.LogWarning($"[TurretSync] OnGunFire idx={idx} turretNull={turret == null} gunsNull={turret?.guns == null}");
                 return;
             }
-            if (idx < 0 || idx >= turret.guns.Count)
+            var ordered = GunRouting.Guns;
+            if (idx < 0 || idx >= ordered.Count)
             {
                 CoopRuntime.LogSource?.LogWarning($"[TurretSync] OnGunFire idx={idx} out of range count={turret.guns.Count}");
                 return;
             }
-            var gun = turret.guns[idx];
+            var gun = ordered[idx];
             if (gun == null)
             {
                 CoopRuntime.LogSource?.LogWarning($"[TurretSync] OnGunFire idx={idx} gun null");

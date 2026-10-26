@@ -53,4 +53,38 @@ Check(!SessionAuthority.LeaveBeforeLocalNavigation(false, true, true)); // apply
 Check(!SessionAuthority.LeaveBeforeLocalNavigation(true, true, false)); // host stays in charge
 Check(!SessionAuthority.LeaveBeforeLocalNavigation(false, false, false)); // single player unchanged
 passed += ManagedChecks.Run(args);
+passed += DocumentNetworkChecks.Run();
+passed += await LocalTransportChecks.Run();
+var hostOrder = GunKeyOrder.Canonical(new[] { "Turret/GunLeft", "Turret/GunRight" });
+var reversedGuestOrder = GunKeyOrder.Canonical(new[] { "Turret/GunRight", "Turret/GunLeft" });
+Check(hostOrder.SequenceEqual(reversedGuestOrder));
+Check(reversedGuestOrder[1] == "Turret/GunRight");
+try { GunKeyOrder.Canonical(new[] { "same", "same" }); throw new Exception("Ambiguous gun identity accepted"); }
+catch (InvalidOperationException) { passed++; }
+Check(MapPanelCommand.TryParse("map|detent|R2|AP", out var rightLoad) && rightLoad.Side == 1 && rightLoad.Gear == "R2");
+Check(MapPanelCommand.TryParse("map|detent|L1|HE", out var leftAssign) && leftAssign.Side == 0 && leftAssign.Gear == "L1");
+Check(MapPanelCommand.TryParse("map|acquire|1|AP", out var rightAcquire) && rightAcquire.Side == 1);
+Check(MapPanelCommand.TryParse("map|select|HE", out var selection) && selection.Product == "HE");
+foreach (string invalid in new[] { "map|acquire|2|AP", "map|acquire|-1|AP", "map|detent|R3|AP", "map|select|AP|extra", "map|detent|R1|", "map|execute|1|AP", "map|acquire|1|x;y" })
+    Check(!MapPanelCommand.TryParse(invalid, out _));
+var controls = new WorldControlIntent(); string door = new string('A', 64);
+Check(!controls.Observe(door, 1, 1, out _)); // joining defaults never overwrite host
+controls.Applied(door, 0);
+Check(controls.Observe(door, 1, 1, out var opening));
+Check(controls.Desired(door, 0, 1) == 1); // exact user regression: old host heartbeat must not close it
+Check(controls.Observe(door, 0, 1, out var closing));
+controls.Acknowledge(opening, true);
+Check(controls.Desired(door, 1, 1) == 0); // old opening ack cannot erase the newer close
+controls.Acknowledge(closing, true); controls.Applied(door, 0);
+Check(!controls.Observe(door, 0, 1, out _));
+controls.Applied(door, 2); // master power bit remains host-owned
+Check(controls.Observe(door, 3, 1, out var lightSwitch) && lightSwitch.Value == 1);
+Check(controls.Desired(door, 2, 1) == 3);
+Check(WorldControlCommand.Parse(lightSwitch.Wire, out var decodedSwitch) && decodedSwitch.Ticket == lightSwitch.Ticket);
+Check(!WorldControlCommand.Parse("set|" + door + "|1|-1", out _));
+var sound = new ScoutAudio { Key = "root/sfx_deploy_scout", Sequence = 1, Playing = false };
+Check(!ScoutStateCodec.PlaySound(true, -1, sound, false)); // late join must not replay an ended historical flyover
+Check(ScoutStateCodec.PlaySound(false, 0, sound, false)); // short live one-shot survives between polls
+Check(!ScoutStateCodec.PlaySound(false, 1, sound, false)); // duplicate pulse cannot play twice
+sound.Playing = true; Check(ScoutStateCodec.PlaySound(true, -1, sound, false));
 Console.WriteLine($"{passed} snapshot, card lifecycle, authority and managed-state checks passed");

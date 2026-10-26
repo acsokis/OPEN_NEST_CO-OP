@@ -446,8 +446,9 @@ public static class ReloadSync
                 throw new InvalidOperationException("Invalid requested firing elevation");
             var turret = TurretController.Instance;
             if (turret == null || turret.guns == null) return;
-            if (idx < 0 || idx >= turret.guns.Count) return;
-            var gun = turret.guns[idx];
+            var ordered = GunRouting.Guns;
+            if (idx < 0 || idx >= ordered.Count) return;
+            var gun = ordered[idx];
             // Resolve by name as well: gun ordering is not guaranteed across peers.
             if (gun == null || gun.name != gunName)
             {
@@ -732,14 +733,7 @@ public static class ReloadSync
 
     private static int IndexOf(GunController gun)
     {
-        var turret = TurretController.Instance;
-        if (turret == null || turret.guns == null || gun == null) return -1;
-        for (int i = 0; i < turret.guns.Count; i++)
-        {
-            var g = turret.guns[i];
-            if (g != null && g.Pointer == gun.Pointer) return i;
-        }
-        return -1;
+        return GunRouting.IndexOf(gun);
     }
 
     internal static List<GunReload> ResolveGuns()
@@ -751,16 +745,22 @@ public static class ReloadSync
             _cachedTurret = IntPtr.Zero;
             return _guns;
         }
-        if (_guns.Count > 0 && _cachedTurret == turret.Pointer) return _guns;
+        var ordered = GunRouting.Guns;
+        if (_guns.Count > 0 && _cachedTurret == turret.Pointer && _guns.Count == ordered.Count)
+        {
+            bool same = true;
+            for (int i = 0; i < _guns.Count; i++) if (_guns[i].Gun == null || _guns[i].Gun.Pointer != ordered[i].Pointer) { same = false; break; }
+            if (same) return _guns;
+        }
 
         _cachedTurret = turret.Pointer;
         _guns = new List<GunReload>();
         try
         {
             var powders = UnityEngine.Resources.FindObjectsOfTypeAll<PowderChargeController>();
-            for (int i = 0; i < turret.guns.Count; i++)
+            for (int i = 0; i < ordered.Count; i++)
             {
-                var gun = turret.guns[i];
+                var gun = ordered[i];
                 if (gun == null) continue;
                 var reload = gun.artilleryReloadController;
                 if (reload == null) continue;

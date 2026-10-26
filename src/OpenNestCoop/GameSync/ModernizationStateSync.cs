@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
 using HarmonyLib;
 using LiteNetLib.Utils;
@@ -16,20 +15,23 @@ namespace OpenNestCoop.GameSync;
 // Only known data models are reflected; packets never name CLR types or methods.
 public sealed class ModernizationStateSync : ISyncedModule
 {
-    private const string Channel = "modernization.documents.v1";
+    private const string Channel = "modernization.documents.v2";
     public int MsgType => CoopRuntime.Net?.ChannelType(Channel) ?? 0;
     private static ModernizationStateSync _instance;
-    private static readonly string[] Keys = { "auto.access", "notes", "intel", "radar.status", "radar.selection", "fire", "auto.pending", "auto.status" };
-    private readonly SharedDocumentStore _store = new();
-    private readonly Dictionary<string, string> _baseline = new();
-    private readonly HashSet<string> _inflight = new();
+    private static readonly string[] Keys = { "auto.access", "notes", "intel", "radar.status", "radar.selection", "fire", "auto.pending", "auto.status", "map.panel" };
+    private ReliableDocumentSync _replica;
+    private readonly HashSet<string> _reported = new();
     private object _terminal;
     private Assembly _assembly;
+    private Assembly _mapAssembly;
     private ManagedStateCodec _codec;
     private string _fingerprint = "", _scene = "";
-    private float _timer, _retry;
-    private bool _ready, _applying, _warned, _patched;
+    private float _timer;
+    private IntPtr _mission;
+    private bool _applying, _warned, _patched, _mapPatched;
     private bool _hostUnlocked;
+    private float _auditAt;
+    private int _sentPackets, _receivedPackets;
     private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     [System.Runtime.CompilerServices.ModuleInitializer]
     internal static void Register() => CoopSyncRegistry.PendingRegister(false, () => new ModernizationStateSync(), Channel);
@@ -54,10 +56,60 @@ public sealed class ModernizationStateSync : ISyncedModule
         if (!Guest) return true;
         _instance?.SendCommand("toggle-radar"); return false;
     }
-    private static bool HostOnlyKey(string key) => key == "auto.status" || key == "radar.status" || key == "auto.access";
+    private static bool HostOnlyKey(string key) => key == "auto.status" || key == "radar.status" || key == "auto.access" || key == "map.panel";
+    private object MapPanel => _mapAssembly?.GetType("IronNestMapDisplay.MapPurchasePanel")?
+        .GetField("Current", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null);
+    private static bool QueueMap(string wire)
+    {
+        var sync = _instance;
+        if (sync?._replica?.Ready != true || !MapPanelCommand.TryParse(wire, out _)) return false;
+        sync.SendCommand(wire); return true;
+    }
+    private static bool MapSelectPrefix(string __0)
+    { if (Guest) QueueMap("map|select|" + __0); return true; } // local preview remains responsive
+    private static bool MapAcquirePrefix(string __0, int __1, ref string __result)
+    {
+        if (!Guest) return true;
+        __result = QueueMap("map|acquire|" + __1 + "|" + __0) ? "CO-OP REQUEST SENT" : "CO-OP SYNC NOT READY"; return false;
+    }
+    private static bool MapExternalPrefix(string __0, int __1, ref string __result)
+    {
+        if (!Guest) return true;
+        __result = QueueMap("map|external|" + __1 + "|" + __0) ? "CO-OP REQUEST SENT" : "CO-OP SYNC NOT READY"; return false;
+    }
+    private static bool MapOrderPrefix(object __instance, string __0, string __1)
+    {
+        if (!Guest) return true;
+        var panel = _instance?.MapPanel;
+        if (panel != null && ReferenceEquals(Get(panel, "order"), __instance))
+        {
+            // The local UI reserves before invoking Start. Release that local
+            // reservation; the host will reserve once in its own transaction.
+            long reservation = (long)Get(panel, "orderReservation");
+            Call(Get(panel, "purchases"), "ReleaseReservation", reservation); Set(panel, "orderReservation", 0L);
+            Set(panel, "message", QueueMap("map|detent|" + __0 + "|" + __1) ? "CO-OP REQUEST SENT" : "CO-OP SYNC NOT READY");
+        }
+        return false;
+    }
+    private void BindMapPanel()
+    {
+        if (_mapPatched) return;
+        _mapAssembly ??= AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.GetName().Name == "IronNestMapDisplay");
+        if (_mapAssembly == null) return;
+        var panel = _mapAssembly.GetType("IronNestMapDisplay.MapPurchasePanel", true);
+        var order = _mapAssembly.GetType("IronNestMapDisplay.DetentOrder", true);
+        var methods = new[] { AccessTools.Method(panel, "Select"), AccessTools.Method(panel, "RequestAcquire"),
+            AccessTools.Method(panel, "RequestExternal"), AccessTools.Method(order, "Start"), AccessTools.Method(order, "Tick") };
+        if (methods.Any(m => m == null)) throw new MissingMethodException("Modernization purchase panel contract changed");
+        var prefixes = new[] { nameof(MapSelectPrefix), nameof(MapAcquirePrefix), nameof(MapExternalPrefix), nameof(MapOrderPrefix), nameof(AllowExecution) };
+        var harmony = new HarmonyLib.Harmony("opennest.modernization.map.panel");
+        for (int i = 0; i < methods.Length; i++) harmony.Patch(methods[i], prefix: new HarmonyMethod(typeof(ModernizationStateSync), prefixes[i]));
+        _mapPatched = true;
+        CoopRuntime.LogSource?.LogInfo("[ModernizationSync] map purchase commands routed to host with explicit left/right lane");
+    }
     private static bool AutoAccessPrefix(ref bool __result)
     {
-        if (!Guest || _instance == null || !_instance._ready) return true;
+        if (!Guest || _instance?._replica?.Ready != true) return true;
         __result = _instance._hostUnlocked; return false;
     }
     private static bool SetAutoFirePrefix(bool __0)
@@ -79,11 +131,10 @@ public sealed class ModernizationStateSync : ISyncedModule
         if (terminal == null) return false;
         if (!ReferenceEquals(terminal, _terminal))
         {
-            _terminal = terminal; _ready = false;
-            // Recreating host UI must not restart authoritative revisions while
-            // guests still hold documents from this same mission.
-            if (Guest) _store.Reset();
-            _baseline.Clear(); _inflight.Clear(); _retry = 0;
+            _terminal = terminal;
+            // Keep host revisions while recreating UI; a guest must obtain a
+            // fresh snapshot before publishing a new terminal's default models.
+            if (Guest) _replica?.Invalidate();
         }
         _fingerprint = _assembly.ManifestModule.ModuleVersionId.ToString("N");
         _codec ??= new ManagedStateCodec(t => t.Assembly == _assembly && t.Namespace == "IronNestBearing");
@@ -107,10 +158,20 @@ public sealed class ModernizationStateSync : ISyncedModule
             _patched = true;
             CoopRuntime.LogSource?.LogInfo("[ModernizationSync] model bridge ready MVID=" + _fingerprint);
         }
+        BindMapPanel();
+        _fingerprint = _assembly.ManifestModule.ModuleVersionId.ToString("N") + ":" + (_mapAssembly?.ManifestModule.ModuleVersionId.ToString("N") ?? "none");
         return true;
     }
     private string Capture(string key)
     {
+        if (key == "map.panel")
+        {
+            var panel = MapPanel;
+            if (panel == null) return "null";
+            var status = (string[])Get(panel, "ExternalStatus");
+            return JsonSerializer.Serialize(new[] { (string)Get(panel, "selected"), (string)Get(panel, "message"),
+                (string)Get(panel, "orderStatus"), status[0], status[1] });
+        }
         if (key == "auto.access") return Guest ? (_hostUnlocked ? "1" : "0")
             : ((bool)_terminal.GetType().GetProperty("AutoUnlocked", Flags).GetValue(_terminal) ? "1" : "0");
         if (key == "notes")
@@ -152,6 +213,17 @@ public sealed class ModernizationStateSync : ISyncedModule
     }
     private void Apply(string key, string payload)
     {
+        if (key == "map.panel")
+        {
+            if (payload == "null") return;
+            var panel = MapPanel ?? throw new InvalidOperationException("Purchase panel not ready");
+            var values = JsonSerializer.Deserialize<string[]>(payload);
+            if (values?.Length != 5) throw new InvalidOperationException("Invalid purchase panel state");
+            Set(panel, "selected", values[0]); Set(panel, "message", values[1]); Set(panel, "orderStatus", values[2]);
+            var status = (string[])Get(panel, "ExternalStatus"); status[0] = values[3]; status[1] = values[4];
+            if ((bool)panel.GetType().GetProperty("Alive", Flags).GetValue(panel)) Call(panel, "Render");
+            return;
+        }
         if (key == "auto.access") { _hostUnlocked = payload == "1"; return; }
         if (key == "notes")
         {
@@ -252,95 +324,110 @@ public sealed class ModernizationStateSync : ISyncedModule
         }
         Set(_terminal, "dirty", true);
     }
-    private void PublishLocal()
+    private void EnsureReplica()
     {
+        if (_replica != null) return;
         var net = CoopRuntime.Net;
-        foreach (var key in Keys)
-        {
-            if (!net.IsHost && HostOnlyKey(key)) continue;
-            string value = Capture(key);
-            if (_baseline.TryGetValue(key, out string previous) && previous == value) continue;
-            if (!net.IsHost && _inflight.Contains(key)) continue;
-            _baseline[key] = value;
-            if (net.IsHost) { var entry = _store.Set(key, value); Broadcast(key, entry); }
-            else { _inflight.Add(key); Send(net.HostSteamId, 1, key, _store.Get(key).Revision, value); }
-        }
+        _replica = new ReliableDocumentSync(net.IsHost, net.HostSteamId, Keys, Keys.Where(HostOnlyKey), Capture,
+            (key, payload) => { _applying = true; try { Apply(key, payload); } finally { _applying = false; } },
+            Send, ExecuteCommand, Report,
+            new Dictionary<string, string[]> { ["auto.status"] = new[] { "auto.pending" }, ["radar.status"] = new[] { "radar.selection" } });
     }
-    private void Send(ulong to, byte op, string key, long revision, string payload)
+    private void Send(ulong to, DocumentPacket packet)
     {
         var w = NetProtocol.Begin((MsgType)MsgType);
-        w.Put(op); w.Put(Scene); w.Put(_fingerprint); w.Put(key); w.Put(revision);
-        byte[] body = MapSnapshotCodec.Encode(Encoding.UTF8.GetBytes(payload)); w.Put(body, 0, body.Length);
+        w.Put(Scene); w.Put(_fingerprint);
+        byte[] body = DocumentPacketCodec.Encode(packet); w.Put(body, 0, body.Length);
         CoopRuntime.Net.SendDirectFragmented(to, NetProtocol.Snapshot(w), true);
+        _sentPackets++;
     }
-    private void Broadcast(string key, SharedDocumentStore.Entry entry)
-    { foreach (var player in CoopRuntime.Net.Roster) if (!player.IsLocal) Send(player.SteamId, 2, key, entry.Revision, entry.Payload); }
     private void SendCommand(string command)
-    { if (_ready && !_applying) { PublishLocal(); Send(CoopRuntime.Net.HostSteamId, 4, command, 0, ""); } }
+    { if (!_applying) _replica?.QueueCommand(command); }
+    private void ExecuteCommand(string command)
+    {
+        if (Guest) throw new InvalidOperationException("Physical controls are host-only");
+        if (command.StartsWith("map|", StringComparison.Ordinal)) { ExecuteMapCommand(command); return; }
+        if (command == "toggle-auto") Call(_terminal, "ToggleAutoFire");
+        else if (command == "toggle-radar") Call(_terminal, "ToggleRadar");
+        else if (command == "auto-fire-on" || command == "auto-fire-off")
+        {
+            if (!(bool)_terminal.GetType().GetProperty("AutoUnlocked", Flags).GetValue(_terminal))
+                throw new InvalidOperationException("Host FCS access is locked");
+            Call(Get(_terminal, "autoFire"), "SetAutoFire", command == "auto-fire-on");
+        }
+        else throw new InvalidOperationException("Unknown Modernization control");
+    }
+    private void ExecuteMapCommand(string wire)
+    {
+        if (!MapPanelCommand.TryParse(wire, out var command)) throw new InvalidOperationException("Invalid purchase command");
+        var panel = MapPanel ?? throw new InvalidOperationException("Purchase panel not ready");
+        var policy = _mapAssembly.GetType("IronNestMapDisplay.PurchasePolicy", true);
+        var shells = (IEnumerable)policy.GetField("Shells", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null);
+        if (!shells.Cast<string>().Contains(command.Product, StringComparer.Ordinal)) throw new InvalidOperationException("Unknown shell product");
+        if (command.Action == "select") { Call(panel, "Select", command.Product); return; }
+        if (command.Action == "acquire" || command.Action == "external")
+        {
+            string result = (string)Call(panel, command.Action == "acquire" ? "RequestAcquire" : "RequestExternal", command.Product, command.Side);
+            if (!string.IsNullOrEmpty(result)) throw new InvalidOperationException(result);
+            return;
+        }
+        if (command.Gear == "N") return;
+        string reason = (string)Call(panel, "Reason", command.Product, true);
+        if (!string.IsNullOrEmpty(reason)) throw new InvalidOperationException(reason);
+        if ((bool)panel.GetType().GetProperty("ShellHandlingBusy", Flags).GetValue(panel)) throw new InvalidOperationException("Shell handling busy");
+        var purchases = Get(panel, "purchases");
+        long reservation = (long)Call(purchases, "ReserveOrdinary");
+        if (reservation == 0) throw new InvalidOperationException("Purchase reservation unavailable");
+        Set(panel, "orderReservation", reservation); Set(panel, "selected", command.Product); Set(panel, "orderStatus", "");
+        try { Call(Get(panel, "order"), "Start", command.Gear, command.Product, (double)UnityEngine.Time.time); }
+        catch { Call(purchases, "ReleaseReservation", reservation); Set(panel, "orderReservation", 0L); throw; }
+    }
+    private void Report(string message)
+    { if (_reported.Count < 32 && _reported.Add(message)) CoopRuntime.LogSource?.LogWarning("[ModernizationSync] " + message); }
     public void Tick(float dt)
     {
         var net = CoopRuntime.Net;
         if (net == null || (net.State != SessionState.Hosting && net.State != SessionState.Joined) || MsgType == 0) return;
-        _timer += dt; _retry -= dt;
+        _timer += dt;
         if (_timer < .75f) return; _timer = 0;
         try
         {
-            if (_scene != Scene) { Reset(); _scene = Scene; }
-            if (string.IsNullOrEmpty(Scene) || FireMission.Instance == null || !Bind()) return;
-            if (net.IsHost) { _ready = true; PublishLocal(); }
-            else if (!_ready) { if (_retry <= 0) { Send(net.HostSteamId, 0, "", 0, ""); _retry = 8; } }
-            else PublishLocal();
+            var mission = FireMission.Instance?.Pointer ?? IntPtr.Zero;
+            if (_scene != Scene || _mission != mission) { Reset(); _scene = Scene; _mission = mission; }
+            bool bound = !string.IsNullOrEmpty(Scene) && FireMission.Instance != null && Bind();
+            if (!bound)
+            {
+                if (UnityEngine.Time.realtimeSinceStartup >= _auditAt)
+                {
+                    _auditAt = UnityEngine.Time.realtimeSinceStartup + 10;
+                    CoopRuntime.LogSource?.LogInfo($"[ModernizationSync] waiting scene='{Scene}' mission={mission} terminal={_terminal != null}");
+                }
+                return;
+            }
+            EnsureReplica();
+            _replica.Peers.Clear();
+            foreach (var player in net.Roster) if (!player.IsLocal) _replica.Peers.Add(player.SteamId);
+            _replica.Tick(UnityEngine.Time.realtimeSinceStartup);
+            if (UnityEngine.Time.realtimeSinceStartup >= _auditAt)
+            {
+                _auditAt = UnityEngine.Time.realtimeSinceStartup + 10;
+                CoopRuntime.LogSource?.LogInfo($"[ModernizationSync] role={(net.IsHost ? "host" : "guest")} ready={_replica.Ready} peers={_replica.Peers.Count} host={net.HostSteamId} tx={_sentPackets} rx={_receivedPackets} pending={_replica.PendingEdits}");
+            }
         }
         catch (Exception ex) { Warn(ex); }
     }
     public void OnPacket(ulong from, byte[] data)
     {
         var net = CoopRuntime.Net;
-        if (net == null || _terminal == null) return;
+        if (net == null || _terminal == null || _replica == null) return;
         try
         {
             var r = new NetDataReader(data); r.SkipBytes(NetProtocol.TypeLen);
-            byte op = r.GetByte(); string scene = r.GetString(), fingerprint = r.GetString(), key = r.GetString(); long revision = r.GetLong();
-            if (scene != Scene || fingerprint != _fingerprint) { if (fingerprint != _fingerprint) CoopRuntime.LogSource?.LogWarning("[ModernizationSync] incompatible Modernization versions; run the file checker on both PCs"); return; }
+            string scene = r.GetString(), fingerprint = r.GetString();
+            if (scene != Scene || fingerprint != _fingerprint) { if (fingerprint != _fingerprint) Report("Incompatible Modernization versions; run the file checker on both PCs"); return; }
             if (!net.Roster.Any(p => !p.IsLocal && (ulong)p.SteamId == from)) return;
-            string payload = Encoding.UTF8.GetString(MapSnapshotCodec.Decode(r.GetRemainingBytes()));
-            if (net.IsHost)
-            {
-                if (op == 0)
-                {
-                    PublishLocal(); foreach (var pair in _store.Entries) Send(from, 2, pair.Key, pair.Value.Revision, pair.Value.Payload);
-                    Send(from, 3, "", 0, ""); return;
-                }
-                if (op == 4 && (key == "toggle-auto" || key == "toggle-radar"))
-                { Call(_terminal, key == "toggle-auto" ? "ToggleAutoFire" : "ToggleRadar"); PublishLocal(); return; }
-                if (op == 4 && (key == "auto-fire-on" || key == "auto-fire-off"))
-                { Call(Get(_terminal, "autoFire"), "SetAutoFire", key == "auto-fire-on"); PublishLocal(); return; }
-                if (op != 1 || !Keys.Contains(key) || HostOnlyKey(key)) return;
-                PublishLocal();
-                if (_store.Get(key).Revision == revision)
-                {
-                    _applying = true; try { Apply(key, payload); } finally { _applying = false; }
-                    _baseline.Remove(key); PublishLocal();
-                }
-                // Acknowledge even unchanged or rejected edits; clients never
-                // retry stale defaults over a newer host document.
-                var entry = _store.Get(key); Send(from, 2, key, entry.Revision, entry.Payload);
-            }
-            else if (from == net.HostSteamId)
-            {
-                if (op == 3) { foreach (var k in Keys) _baseline[k] = Capture(k); _ready = true; return; }
-                if (op != 2 || !Keys.Contains(key)) return;
-                if (_ready) PublishLocal();
-                bool acknowledged = _inflight.Remove(key);
-                bool current = revision >= _store.Get(key).Revision;
-                if (_store.Receive(key, revision, payload) || (acknowledged && current))
-                {
-                    _applying = true; try { Apply(key, payload); } finally { _applying = false; }
-                    _baseline[key] = Capture(key);
-                    if (key == "auto.status" && !_inflight.Contains("auto.pending")) _baseline["auto.pending"] = Capture("auto.pending");
-                    if (key == "radar.status" && !_inflight.Contains("radar.selection")) _baseline["radar.selection"] = Capture("radar.selection");
-                }
-            }
+            _replica.Receive(from, DocumentPacketCodec.Decode(r.GetRemainingBytes()));
+            _receivedPackets++;
         }
         catch (Exception ex) { Warn(ex); }
     }
@@ -351,5 +438,5 @@ public sealed class ModernizationStateSync : ISyncedModule
     }
     public void OnSessionStarted() => Reset();
     public void OnSessionEnded() => Reset();
-    public void Reset() { _store.Reset(); _baseline.Clear(); _inflight.Clear(); _terminal = null; _scene = ""; _ready = _warned = _hostUnlocked = false; _timer = _retry = 0; }
+    public void Reset() { _replica = null; _reported.Clear(); _terminal = null; _mission = IntPtr.Zero; _scene = ""; _warned = _hostUnlocked = false; _timer = 0; }
 }

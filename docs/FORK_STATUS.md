@@ -5,7 +5,29 @@ contributed by Gabor Kocsis (@acsokis) with AI-assisted implementation.
 The upstream authors and AGPL-3.0 license are preserved. It is not a port of
 Jager2251's separate Iron Nest Co-op mod.
 
-Current experimental test version: **0.2.1-syncfix.10.1**.
+Current experimental test version: **0.2.1-syncfix.11** (MelonLoader).
+
+Syncfix.11 selects the host's exact native MissionID instead of the first card
+sharing its Unity scene. The tester confirmed matching background maps in two
+complete local game instances on 2026-10-26. It also implements acknowledged
+document replication, stable gun routing, guest door/light intents, native marker
+endpoints, exact requisition card/slot routing and experimental scout replication.
+These implementations do not establish complete native or two-PC coverage.
+See [current validation and limitations](SYNCFIX_11_TEST_HU.md).
+
+Download the new `IRON_NEST_UPDATE.cmd` from release syncfix.11. Old updater
+copies remain pinned to their old release, so replace the CMD itself on both PCs.
+No HDR, Modernization implementation, personal saves or private logs are bundled.
+
+Local development: `Prepare-LocalPair.ps1` and `Start-LocalPair.ps1` create/start
+two isolated full game copies. Explicit DevProfile mode enforces 960x540 windowed,
+20 FPS and no VSync without writing PlayerPrefs. Normal launches are unaffected.
+136 automated checks passed; real local TCP and game handshakes were verified.
+The full tablet, scout, door/light, purchase and two-PC paths remain partially
+verified. The background fix does not establish that all previous tablet issues
+are resolved.
+
+## Previous release history (validation below refers to those older releases)
 
 Syncfix.10.1 corrects stale runtime/network version labels found during startup
 validation. MelonInfo now uses NetConfig.Version, and packaging rejects a

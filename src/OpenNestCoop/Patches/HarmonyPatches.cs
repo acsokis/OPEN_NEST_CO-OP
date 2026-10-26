@@ -123,7 +123,7 @@ public static class HarmonyPatches
         TryPatch(typeof(MissionManager), "ReturnToMap", prefix: nameof(PreMissionReturnMap));
         TryPatch(typeof(MissionManager), "EndOperationAndReturnToMenu", prefix: nameof(PreMissionEndOperation));
         // 补给购买（Supply console）：拉征用杆 → AttemptRequisition（主机权威执行购买，购买对所有人生效）
-        TryPatch(typeof(RequisitionSlot), "AttemptRequisition", prefix: nameof(PreRequisition));
+        TryPatch(typeof(RequisitionSlot), "AttemptRequisition", prefix: nameof(PreRequisition), postfix: nameof(PostRequisition));
         // 卡牌入槽/出槽（PunchcardSync）：ItemSlot.PlaceItem/RemoveItem → 广播 → 对端执行
         // （⚠️ 卡牌插入卡槽走 ItemSlot 放置，不走 RequisitionSlot.PlaceCard——那个不触发）
         TryPatch(typeof(ItemSlot), "PlaceItem", postfix: nameof(PostItemSlotPlace));
@@ -812,6 +812,11 @@ public static class HarmonyPatches
         }
         catch (System.Exception ex) { CoopRuntime.LogSource?.LogWarning($"Harmony PreRequisition: {ex.Message}"); }
         return true;
+    }
+
+    private static void PostRequisition(RequisitionSlot __instance)
+    {
+        if (!OpenNestCoop.Net.AutoJoin.WantNewSync) PurchaseSync.AfterLocalPurchase(__instance);
     }
 
     /// <summary>卡牌入槽：ItemSlot.PlaceItem 后 → 广播（对端执行 PlaceItem，槽位 CurrentItem 两端一致）。</summary>

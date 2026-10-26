@@ -10,11 +10,9 @@ using SleepyNodes = Il2CppSleepyNodes;
 namespace OpenNestCoop.GameSync;
 
 /// <summary>
-/// 任务同步（最小版）：同步 MissionManager.CurrentMissionSceneName（当前任务标识，string）。
-/// 主机权威：客户端本地变化上行 → 主机应用 → 广播；防环。
-/// 说明：MissionManager.MissionState 在 interop 中非标准枚举（无法 cast），
-/// 故用任务场景名作为标识（跨端唯一、可直接字符串比较）。
-/// 任务开始/结束事件、实体位置、计时器精确同步后续再补。
+/// Host-authoritative mission navigation. Native graphs use an explicit @m:
+/// MissionID; shared Unity scene names are only a legacy fallback. A scene name
+/// cannot distinguish campaign cards with different maps and mission graphs.
 /// </summary>
 public sealed class MissionSync : ISyncedModule
 {
@@ -155,7 +153,9 @@ public sealed class MissionSync : ISyncedModule
                         else if (scene != _lastAppliedScene)
                         {
                             string raw = UnwrapMissionTag(scene); // 去 @c:/@n: 前缀
-                            if (m.CurrentMissionSceneName == raw || (m.CurrentMission != null && m.CurrentMission.MissionID == raw))
+                            if ((scene.StartsWith("@m:", StringComparison.Ordinal)
+                                    ? m.CurrentMission != null && m.CurrentMission.MissionID == raw
+                                    : m.CurrentMissionSceneName == raw || (m.CurrentMission != null && m.CurrentMission.MissionID == raw)))
                             {
                                 // 客机本地已在目标任务（玩家已手动开始）→ 直接标记已应用
                                 _lastAppliedScene = scene;
@@ -302,6 +302,7 @@ public sealed class MissionSync : ISyncedModule
     {
         try
         {
+            if (scene.StartsWith("@m:", StringComparison.Ordinal)) return graph.MissionID == scene.Substring(3);
             var sr = graph.SceneReference;
             if (sr != null && sr.sceneName == scene) return true;
             if (graph.MissionID == scene) return true;
@@ -384,6 +385,10 @@ public sealed class MissionSync : ISyncedModule
                 try { mid = cm.MissionID; } catch { }
                 if (!string.IsNullOrEmpty(mid)) return "@c:" + mid;
             }
+            // A Unity scene is a reusable shell, not a mission identity. Several
+            // campaign cards can share it while choosing different map images,
+            // topography and graphs. Always follow the host's exact graph ID.
+            if (cm != null && !string.IsNullOrEmpty(cm.MissionID)) return "@m:" + cm.MissionID;
             var n = m.CurrentMissionSceneName;
             // ⚠️ MissionBase 是无区分度默认场景名（多数原生任务 SceneReference 未列动态场景 → 客机无法
             // 用它匹配任务卡片）→ 回退 CurrentMission.MissionID（原生任务 ID，客机可按 MissionID 匹配）。
@@ -403,7 +408,7 @@ public sealed class MissionSync : ISyncedModule
     private static string UnwrapMissionTag(string tagged)
     {
         if (string.IsNullOrEmpty(tagged)) return tagged;
-        if (tagged.StartsWith("@c:", StringComparison.Ordinal) || tagged.StartsWith("@n:", StringComparison.Ordinal))
+            if (tagged.StartsWith("@c:", StringComparison.Ordinal) || tagged.StartsWith("@n:", StringComparison.Ordinal) || tagged.StartsWith("@m:", StringComparison.Ordinal))
             return tagged.Substring(3);
         return tagged;
     }

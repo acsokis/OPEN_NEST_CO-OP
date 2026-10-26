@@ -28,12 +28,14 @@ public class MelonModEntry : MelonMod
         CoopRuntime.HostInstance = this;
         try
         {
+            DevelopmentProfile.Initialize();
             // 场景可能未就绪，延迟到 LateInitialize/SceneLoaded 再 Startup
             CoopRuntime.Startup();
         }
         catch (System.Exception ex)
         {
             MelonLogger.Error($"OpenNestCoop init failed: {ex}");
+            if (System.Array.IndexOf(System.Environment.GetCommandLineArgs(), "--coop-profile") >= 0) UnityEngine.Application.Quit();
         }
     }
 

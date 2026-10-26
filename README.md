@@ -1,6 +1,6 @@
 # OPEN-NEST-CO-OP-
 
-> **acsokis experimental syncfix fork (0.2.1-syncfix.9).**
+> **acsokis experimental syncfix fork (0.2.1-syncfix.11).**
 > This fork contains AI-assisted co-op interoperability repairs contributed by
 > Gabor Kocsis (@acsokis). It is not an official upstream release and full
 > two-PC synchronization is still being tested. See [fork status and build instructions](docs/FORK_STATUS.md).
@@ -18,7 +18,13 @@ man the fire-control computer, brew coffee — together with friends over Steam.
 
 ## Features
 
-| Milestone | Status | What's synced |
+These are upstream implementation milestones, **not verified multiplayer
+coverage in this fork**. The fork has 136 automated checks and a real local
+two-instance test. Matching backgrounds were confirmed after exact MissionID
+selection was added. Full F1-F3, scout, door/light, purchase and two-PC coverage
+remains incomplete. See [current validation](docs/SYNCFIX_11_TEST_HU.md).
+
+| Milestone | Upstream implementation | Implemented features (runtime coverage varies) |
 |---|---|---|
 | M0 | ✅ | Tech recon: stack (Unity 6 / IL2CPP), loaders (BepInEx 6 / MelonLoader), Steam APIs |
 | M1 | ✅ | **Steam lobby**: create / join / browse, **room password** (host-authoritative handshake + kick), **mod version check & label** (same-version rooms listed first), P2P transport (reliable + unreliable, batched), roster, ping, chat (**native CJK IME input**), localized UGUI menu, **remembered lobby settings**, reusable **CoopInputBox** |

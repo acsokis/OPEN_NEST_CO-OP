@@ -21,8 +21,8 @@ public sealed class HatchSync : ISyncedModule
     [System.Runtime.CompilerServices.ModuleInitializer]
     internal static void SelfRegister()
     {
-        CoopSyncRegistry.PendingRegister(false, () => new HatchSync());
-        CoopSyncRegistry.PendingRegister(false, () => StateSnapshotSync.Register("hatch", BuildHatchSnapshot, ApplyHatchSnapshot));
+        // WorldControlsSync owns both directions and its snapshot/acknowledgement.
+        // A second host-only hatch heartbeat would overwrite guest intentions.
     }
     private const float Interval = 1.0f; // 1.0s（原 0.4s，降低 FindObjectsOfType<AnimatorBoolToggler> 高频扫描 CPU）
     private float _timer;

@@ -65,7 +65,7 @@ try{
   [IO.Directory]::CreateDirectory((Split-Path $saved))|Out-Null
   Move-Item -LiteralPath $dll.FullName -Destination $saved
  }
- $results=@('Open Nest Co-op syncfix.10.1 installer',('Game: '+$game),('Backup: '+$backup))
+ $results=@('Open Nest Co-op syncfix.11 installer',('Game: '+$game),('Backup: '+$backup))
  foreach($item in $manifest){
   $dest=Join-Path $game $item.Path
   if(Test-Path -LiteralPath $dest){$saved=Join-Path $backup $item.Path;[IO.Directory]::CreateDirectory((Split-Path $saved))|Out-Null;Copy-Item -LiteralPath $dest -Destination $saved -Force}
@@ -76,7 +76,7 @@ try{
  }
  $installed=Join-Path $game 'Mods\OpenNestCoop.MelonMod.dll'
  $version=(Get-Item -LiteralPath $installed).VersionInfo.ProductVersion
- if($version -notlike '*syncfix.10.1*'){throw ('Varatlan telepitett verzio: '+$version)}
+ if(($version -split '\+',2)[0] -ne '0.2.1-syncfix.11'){throw ('Varatlan telepitett verzio: '+$version)}
  $results+=('Installed product version: '+$version)
  $checkScript=Join-Path $game 'OpenNestUpdate\Check-Install.ps1'
  $check=& $checkScript -GamePath $game -PassThru
@@ -85,7 +85,7 @@ try{
  $results|Set-Content -LiteralPath $report -Encoding UTF8
  $desktopReport=Join-Path ([Environment]::GetFolderPath('Desktop')) 'IRON_NEST_UPDATE_10_EREDMENY.txt'
  if(-not $VerifyOnly){try{$results|Set-Content -LiteralPath $desktopReport -Encoding UTF8}catch{Write-Host 'Az Asztalra nem lehetett jelentest irni; a csomag mappajaban megvan.'}}
- Write-Host 'TELEPITVE: Open Nest Co-op 0.2.1-syncfix.10.1.' -ForegroundColor Green
+ Write-Host 'TELEPITVE: Open Nest Co-op 0.2.1-syncfix.11.' -ForegroundColor Green
  Write-Host 'Mindket gepen ezt telepitsetek, majd a host folytassa a mentest es nyisson uj szobat.'
  Write-Host 'A csomag jegyzekeben szereplo fajlok telepultek. HDR es jatekmentesek nem modosultak.'
  Write-Host ('Mentes: '+$backup)

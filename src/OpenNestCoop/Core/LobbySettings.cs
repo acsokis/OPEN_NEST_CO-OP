@@ -16,7 +16,7 @@ public static class LobbySettings
     public static ulong RecentLobbyId;
 
     private static string Path =>
-        System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "open_nest_lobby_settings.txt");
+        System.IO.Path.Combine(DevelopmentProfile.Root ?? UnityEngine.Application.persistentDataPath, "open_nest_lobby_settings.txt");
 
     /// <summary>保存房间设置（建房时调用）。失败仅告警，不影响建房。
     /// 格式：roomName\nmaxPlayers\npassword\nrecentLobbyId。</summary>

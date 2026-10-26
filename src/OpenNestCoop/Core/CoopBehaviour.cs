@@ -26,6 +26,8 @@ public class CoopBehaviour : MonoBehaviour
             var net = CoopRuntime.Net;
             // 用 unscaledDeltaTime：游戏切菜单/UI 暂停（timeScale=0）时同步不中断
             net?.Update(Time.unscaledDeltaTime);
+            OpenNestCoop.GameSync.IntegrationAudit.Tick();
+            DevelopmentProfile.Verify();
 
             // 独立文件日志批量落盘（1s 间隔缓冲写，性能好；诊断/联机日志 → OpenNestLogs/*.log）
             OpenNestCore.Logging.ModLog.Flush(Time.unscaledDeltaTime);

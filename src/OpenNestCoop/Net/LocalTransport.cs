@@ -19,16 +19,24 @@ namespace OpenNestCoop.Net;
 public class LocalTransport : ITransport, IDisposable
 {
     private TcpListener _listener;
-    private TcpClient _client;
-    private NetworkStream _stream;
-    private Thread _readThread;
+    private sealed class Connection : IDisposable
+    {
+        internal readonly TcpClient Client;
+        internal readonly NetworkStream Stream;
+        internal readonly object SendGate = new();
+        internal readonly long Generation;
+        internal Connection(TcpClient client, long generation) { Client = client; Stream = client.GetStream(); Generation = generation; }
+        public void Dispose() { try { Client.Close(); } catch { } }
+    }
+    private Connection _connection;
+    private long _generation;
     private volatile bool _running;
 
     /// <summary>本端 peerId（host=1, client=2）。</summary>
     public ulong LocalPeerId = 1;
 
     // 接收队列：peerId → 数据
-    private readonly ConcurrentQueue<(ulong, byte[])> _incoming = new();
+    private readonly ConcurrentQueue<(long, ulong, byte[])> _incoming = new();
 
     /// <summary>是否有客户端连上（host 用）。</summary>
     public event Action ClientConnected;
@@ -60,11 +68,7 @@ public class LocalTransport : ITransport, IDisposable
                 var client = _listener.AcceptTcpClient();
                 client.NoDelay = true;
                 // 只接受一个 client（双开测试）
-                _client = client;
-                _stream = client.GetStream();
-                _readThread = new Thread(ReadLoop);
-                _readThread.IsBackground = true;
-                _readThread.Start();
+                Attach(client);
                 CoopRuntime.LogSource?.LogInfo("[LocalTransport] client connected");
                 try { ClientConnected?.Invoke(); } catch { }
             }
@@ -77,51 +81,63 @@ public class LocalTransport : ITransport, IDisposable
     {
         try
         {
-            _client = new TcpClient();
-            _client.NoDelay = true;
-            var iar = _client.BeginConnect(IPAddress.Loopback, port, null, null);
+            var client = new TcpClient();
+            client.NoDelay = true;
+            var iar = client.BeginConnect(IPAddress.Loopback, port, null, null);
             if (!iar.AsyncWaitHandle.WaitOne(300)) // 300ms 超时，避免 host 未就绪时长时间卡住
             {
-                try { _client.Close(); } catch { }
+                try { client.Close(); } catch { }
                 return false;
             }
-            _client.EndConnect(iar);
-            _stream = _client.GetStream();
+            client.EndConnect(iar);
             LocalPeerId = 2;
             _running = true;
-            _readThread = new Thread(ReadLoop);
-            _readThread.IsBackground = true;
-            _readThread.Start();
+            Attach(client);
             CoopRuntime.LogSource?.LogInfo($"[LocalTransport] client connected to host 127.0.0.1:{port}");
             return true;
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"[LocalTransport] Connect failed: {ex.Message}"); return false; }
     }
 
-    private void ReadLoop()
+    private void Attach(TcpClient client)
+    {
+        var connection = new Connection(client, Interlocked.Increment(ref _generation));
+        var previous = Interlocked.Exchange(ref _connection, connection);
+        previous?.Dispose();
+        var reader = new Thread(() => ReadLoop(connection)) { IsBackground = true };
+        reader.Start();
+    }
+
+    private void ReadLoop(Connection connection)
     {
         try
         {
             var lenBuf = new byte[4];
-            while (_running && _stream != null)
+            while (_running && ReferenceEquals(Volatile.Read(ref _connection), connection))
             {
-                if (!ReadExactly(lenBuf, 4)) break;
+                if (!ReadExactly(connection.Stream, lenBuf, 4)) break;
                 int len = (lenBuf[0] << 24) | (lenBuf[1] << 16) | (lenBuf[2] << 8) | lenBuf[3];
                 if (len <= 0 || len > 1024 * 1024) break;
                 var payload = new byte[len];
-                if (!ReadExactly(payload, len)) break;
-                _incoming.Enqueue((LocalPeerId == 1 ? 2UL : 1UL, payload)); // 对端 peerId
+                if (!ReadExactly(connection.Stream, payload, len)) break;
+                if (ReferenceEquals(Volatile.Read(ref _connection), connection))
+                    _incoming.Enqueue((connection.Generation, LocalPeerId == 1 ? 2UL : 1UL, payload));
             }
         }
         catch { }
+        finally
+        {
+            Interlocked.CompareExchange(ref _connection, null, connection);
+            connection.Dispose();
+        }
     }
 
-    private bool ReadExactly(byte[] buf, int count)
+    private static bool ReadExactly(NetworkStream stream, byte[] buf, int count)
     {
         int off = 0;
         while (off < count)
         {
-            int n = _stream.Read(buf, off, count - off);
+            int n = stream.Read(buf, off, count - off);
             if (n <= 0) return false;
             off += n;
         }
@@ -135,7 +151,8 @@ public class LocalTransport : ITransport, IDisposable
 
     public void Send(ulong peerId, byte[] data, int len, bool reliable)
     {
-        if (data == null || len <= 0 || _stream == null) return;
+        var connection = Volatile.Read(ref _connection);
+        if (data == null || len <= 0 || len > data.Length || len > 1024 * 1024 || connection == null) return;
         try
         {
             var lenBuf = new byte[4];
@@ -143,11 +160,12 @@ public class LocalTransport : ITransport, IDisposable
             lenBuf[1] = (byte)(len >> 16);
             lenBuf[2] = (byte)(len >> 8);
             lenBuf[3] = (byte)len;
-            lock (_stream)
+            lock (connection.SendGate)
             {
-                _stream.Write(lenBuf, 0, 4);
-                _stream.Write(data, 0, len);
-                _stream.Flush();
+                if (!ReferenceEquals(Volatile.Read(ref _connection), connection)) return;
+                connection.Stream.Write(lenBuf, 0, 4);
+                connection.Stream.Write(data, 0, len);
+                connection.Stream.Flush();
             }
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"[LocalTransport] Send: {ex.Message}"); }
@@ -155,10 +173,12 @@ public class LocalTransport : ITransport, IDisposable
 
     public bool Poll(out ulong sender, out byte[] data)
     {
-        if (_incoming.TryDequeue(out var item))
+        while (_incoming.TryDequeue(out var item))
         {
-            sender = item.Item1;
-            data = item.Item2;
+            var connection = Volatile.Read(ref _connection);
+            if (connection == null || item.Item1 != connection.Generation) continue;
+            sender = item.Item2;
+            data = item.Item3;
             return true;
         }
         sender = 0;
@@ -169,8 +189,8 @@ public class LocalTransport : ITransport, IDisposable
     public void Dispose()
     {
         _running = false;
-        try { _stream?.Close(); } catch { }
-        try { _client?.Close(); } catch { }
+        Interlocked.Exchange(ref _connection, null)?.Dispose();
+        while (_incoming.TryDequeue(out _)) { }
         try { _listener?.Stop(); } catch { }
     }
 }

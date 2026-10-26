@@ -297,6 +297,7 @@ public sealed class ButtonClickSync : ISyncedModule
     {
         try
         {
+            if (WorldControlsSync.OwnsTarget(t)) return false;
             // 不检查 GetActive()：OnLocalClick 只在真实点击（OnClickDown patch）时调用，
             // 能点击的按钮必然是激活的；inactive 对象即使被诊断扫描列出也不会上报。
             // 移除 active 检查让"初始 inactive、激活后点按"的开关（如 SaftySwitch 安全开关）也能同步。

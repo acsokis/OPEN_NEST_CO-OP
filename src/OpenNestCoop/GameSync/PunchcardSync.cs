@@ -20,7 +20,7 @@ public sealed class PunchcardSync : ISyncedModule
 
     // ⚠️ 模块自注册：程序集加载时入队（V1 方案，含附加类型 137），Startup FlushPending 统一注册
     [System.Runtime.CompilerServices.ModuleInitializer]
-    internal static void SelfRegister() => CoopSyncRegistry.PendingRegister(false, () => new PunchcardSync(), null, null, CardSlotEventMsgType);
+    internal static void SelfRegister() => CoopSyncRegistry.PendingRegister(false, () => new PunchcardSync(), null, null, CardSlotEventMsgType, CardListMsgType);
     /// <summary>卡牌入槽/出槽事件（MsgType=137）：PlaceCard/RemoveCard → 广播 → 对端执行同一操作，
     /// 槽位 CurrentCard 两端一致（购买依赖卡牌在槽）。</summary>
     public const byte CardSlotEventMsgType = 137;
@@ -50,6 +50,11 @@ public sealed class PunchcardSync : ISyncedModule
     private readonly System.Collections.Generic.Dictionary<PunchcardRuntime, bool> _dragState = new();
     // 主机：最近一次广播的卡牌集合签名（变化才广播）
     private string _hostCardSig;
+    private float _cardListHeartbeat;
+    private System.Collections.Generic.List<string> _pendingHostCards;
+    private readonly System.Collections.Generic.HashSet<string> _seenSlotEvents = new();
+    private sealed class PendingSlotEvent { internal byte Op; internal string Slot, Card, Id; internal ulong From; internal float Expires; }
+    private readonly System.Collections.Generic.Dictionary<string, PendingSlotEvent> _pendingSlotEvents = new();
 
     public void Tick(float dt)
     {
@@ -63,6 +68,12 @@ public sealed class PunchcardSync : ISyncedModule
         try
         {
             EnsureCache(dt);
+            if (!net.IsHost && _pendingHostCards != null) EnsureHostCards(_pendingHostCards);
+            foreach (var entry in new System.Collections.Generic.List<PendingSlotEvent>(_pendingSlotEvents.Values))
+            {
+                if (TryApplySlotEvent(entry, net)) _pendingSlotEvents.Remove(entry.Id);
+                else if (Time.realtimeSinceStartup >= entry.Expires) { _pendingSlotEvents.Remove(entry.Id); CoopRuntime.LogSource?.LogWarning("[PunchcardSync] card/slot not ready before timeout: " + entry.Card + " @ " + entry.Slot); }
+            }
             var cards = _cache; // includeInactive：卡牌可能 active=false（隐藏）
             if (net.IsHost)
             {
@@ -179,9 +190,9 @@ public sealed class PunchcardSync : ISyncedModule
     /// <summary>客机：检测拖放事件（IsBeingDragged true→false）→ 放下瞬间上行该卡牌位置（主机权威）。</summary>
     private void ClientSendDropEvents(NetManager net, PunchcardRuntime[] cards)
     {
-        int n = Math.Min(cards.Length, 16);
+        int n = Math.Min(cards.Length, 64);
         var w = NetProtocol.Begin((MsgType)MsgType);
-        w.Put((byte)1);
+        var dropped = new System.Collections.Generic.List<PunchcardRuntime>();
         bool any = false;
         // ⚠️ 2026-08-26 拖拽诊断：打印卡片 DraggableItem 拖拽状态（确认"客机无法交互"——卡片能否拖）。
         bool anyDrag = false;
@@ -197,13 +208,7 @@ public sealed class PunchcardSync : ISyncedModule
                 _dragState[c] = false;
                 string id = CardIdOf(c);
                 if (string.IsNullOrEmpty(id)) continue;
-                var p = c.transform.position;
-                var r = c.transform.localEulerAngles;
-                w.Put(id); // 按卡牌定义 ID（两端索引顺序可能不同）
-                w.Put((byte)0);
-                w.Put(p.x); w.Put(p.y); w.Put(p.z);
-                w.Put(c.gameObject.activeSelf ? (byte)1 : (byte)0);
-                w.Put(r.x); w.Put(r.y); w.Put(r.z);
+                dropped.Add(c);
                 any = true;
             }
             else _dragState[c] = dragging;
@@ -218,6 +223,14 @@ public sealed class PunchcardSync : ISyncedModule
             catch { }
         }
         if (!any) return;
+        w.Put((byte)dropped.Count);
+        foreach (var card in dropped)
+        {
+            var position = card.transform.position; var rotation = card.transform.localEulerAngles;
+            w.Put(CardIdOf(card)); w.Put((byte)0);
+            w.Put(position.x); w.Put(position.y); w.Put(position.z); w.Put(card.gameObject.activeSelf ? (byte)1 : (byte)0);
+            w.Put(rotation.x); w.Put(rotation.y); w.Put(rotation.z);
+        }
         net.EnqueueBatch(NetProtocol.Snapshot(w), false);
         CoopRuntime.LogSource?.LogInfo("[PunchcardSync] client drop event up");
     }
@@ -245,7 +258,9 @@ public sealed class PunchcardSync : ISyncedModule
                 }
             ids.Sort();
             string sig = string.Join("|", ids);
-            if (_hostCardSig == sig) return;
+            _cardListHeartbeat += Interval;
+            if (_hostCardSig == sig && _cardListHeartbeat < 4f) return;
+            _cardListHeartbeat = 0;
             _hostCardSig = sig;
             var w = NetProtocol.Begin((MsgType)CardListMsgType);
             w.Put((byte)Math.Min(ids.Count, 64));
@@ -266,6 +281,7 @@ public sealed class PunchcardSync : ISyncedModule
         for (int i = 0; i < n; i++) ids.Add(r.GetString());
         CoopRuntime.LogSource?.LogInfo($"[PunchcardSync] recv card list n={ids.Count}");
         if (net.IsHost) return; // 主机无需补齐
+        _pendingHostCards = ids;
         EnsureHostCards(ids);
     }
 
@@ -303,8 +319,9 @@ public sealed class PunchcardSync : ISyncedModule
                 }
                 catch { }
             }
-            if (missing.Count == 0) return;
+            if (missing.Count == 0) { _pendingHostCards = null; return; }
             mgr.EnsureCards(missing);
+            _cache = null; // the next tick must include newly generated cards
             CoopRuntime.LogSource?.LogInfo($"[PunchcardSync] ensure host cards missing={missing.Count} totalHost={hostIds.Count} existing={existingIds.Count}");
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"PunchcardSync EnsureHostCards: {ex.Message}"); }
@@ -327,12 +344,13 @@ public sealed class PunchcardSync : ISyncedModule
             if (net.State != SessionState.Hosting && net.State != SessionState.Joined) return;
             var card = item.GetComponent<PunchcardRuntime>();
             if (card == null) return; // 非卡牌物品（其他 DraggableItem）不处理
-            int slotIdx = IndexOfSlot(slot);
+            string slotIdx = SlotKey(slot);
             string cardId = CardIdOf(card);
             CoopRuntime.LogSource?.LogInfo($"[PunchcardSync] OnLocalPlaceCard slot={slotIdx} card='{cardId}' host={net.IsHost}");
-            if (slotIdx < 0 || string.IsNullOrEmpty(cardId)) return;
+            if (string.IsNullOrEmpty(slotIdx) || string.IsNullOrEmpty(cardId)) return;
             var w = NetProtocol.Begin((MsgType)CardSlotEventMsgType);
-            w.Put((byte)1); w.Put((byte)slotIdx); w.Put(cardId);
+            string eventId = Guid.NewGuid().ToString("N");
+            w.Put((byte)1); w.Put(slotIdx); w.Put(cardId); w.Put(eventId);
             BroadcastCardEvent(w, net);
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"PunchcardSync OnLocalPlaceCard: {ex.Message}"); }
@@ -349,12 +367,13 @@ public sealed class PunchcardSync : ISyncedModule
             if (net.State != SessionState.Hosting && net.State != SessionState.Joined) return;
             var card = item.GetComponent<PunchcardRuntime>();
             if (card == null) return;
-            int slotIdx = IndexOfSlot(slot);
+            string slotIdx = SlotKey(slot);
             string cardId = CardIdOf(card);
             CoopRuntime.LogSource?.LogInfo($"[PunchcardSync] OnLocalRemoveCard slot={slotIdx} card='{cardId}' host={net.IsHost}");
-            if (slotIdx < 0 || string.IsNullOrEmpty(cardId)) return;
+            if (string.IsNullOrEmpty(slotIdx) || string.IsNullOrEmpty(cardId)) return;
             var w = NetProtocol.Begin((MsgType)CardSlotEventMsgType);
-            w.Put((byte)2); w.Put((byte)slotIdx); w.Put(cardId);
+            string eventId = Guid.NewGuid().ToString("N");
+            w.Put((byte)2); w.Put(slotIdx); w.Put(cardId); w.Put(eventId);
             BroadcastCardEvent(w, net);
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"PunchcardSync OnLocalRemoveCard: {ex.Message}"); }
@@ -372,17 +391,14 @@ public sealed class PunchcardSync : ISyncedModule
             net.Transport.Send(net.HostSteamId, data, true);
     }
 
-    private static int IndexOfSlot(ItemSlot target)
+    internal static string SlotKey(ItemSlot target)
     {
-        try
-        {
-            var slots = UnityEngine.Object.FindObjectsOfType<ItemSlot>();
-            if (slots == null) return -1;
-            for (int i = 0; i < slots.Length; i++)
-                if (slots[i] != null && slots[i] == target) return i;
-        }
-        catch { }
-        return -1;
+        if (target == null) return "";
+        string key = "";
+        for (var transform = target.transform; transform != null; transform = transform.parent) key = transform.name + "/" + key;
+        int index = 0;
+        foreach (var slot in target.GetComponents<ItemSlot>()) { if (slot.Pointer == target.Pointer) break; index++; }
+        return key + "#" + index;
     }
 
     /// <summary>取卡牌定义 ID（PunchcardDefinitionV2.ID，AllDefinitions 字典 key）——按内容匹配卡牌，
@@ -410,69 +426,70 @@ public sealed class PunchcardSync : ISyncedModule
     /// <summary>处理卡槽事件（137）：对端执行 PlaceCard/RemoveCard → 槽位 CurrentCard 两端一致。</summary>
     /// <summary>卡牌事件去重：同 (slot, cardId) 短时间（0.6s）只处理一次（防双端放/取互相触发循环回跳
     /// → 卡牌在槽位反复 Place/Remove → 客机补给台卡牌无法稳定交互）。</summary>
-    private string _lastEvKey = "";
-    private float _lastEvTime = -1f;
-    private const float EvDedupWindow = 0.6f;
 
     private void ApplyCardSlotEvent(NetDataReader r, NetManager net, ulong from)
     {
         byte ev = r.GetByte();
-        byte slotIdx = r.GetByte();
+        string slotIdx = r.GetString();
         string cardId = r.GetString();
+        string eventId = r.GetString();
         // 同 (slot, card) 事件去重（放卡/取卡交替也算同 key）——防 apply 后触发二次事件循环
-        try
-        {
-            string key = $"{slotIdx}|{cardId}";
-            float now = UnityEngine.Time.realtimeSinceStartup;
-            if (key == _lastEvKey && now - _lastEvTime < EvDedupWindow) return;
-            _lastEvKey = key;
-            _lastEvTime = now;
-        }
-        catch { }
-        if (net.IsHost)
-        {
-            // 主机转发给其他客机（不含发起者）
-            var fwd = NetProtocol.Begin((MsgType)CardSlotEventMsgType);
-            fwd.Put(ev); fwd.Put(slotIdx); fwd.Put(cardId);
-            var fd = NetProtocol.Snapshot(fwd);
-            foreach (var p in net.Roster)
-                if (!p.IsLocal && (ulong)p.SteamId != from)
-                    net.Transport.Send(p.SteamId, fd, true);
-        }
-        var slots = UnityEngine.Object.FindObjectsOfType<ItemSlot>();
+        if ((ev != 1 && ev != 2) || slotIdx.Length > 2048 || cardId.Length > 256 || !Guid.TryParseExact(eventId, "N", out _)) return;
+        if (_seenSlotEvents.Count >= 8192 || _seenSlotEvents.Contains(eventId) || _pendingSlotEvents.ContainsKey(eventId)) return;
+        var pending = new PendingSlotEvent { Op = ev, Slot = slotIdx, Card = cardId, Id = eventId, From = from, Expires = Time.realtimeSinceStartup + 6 };
+        if (!TryApplySlotEvent(pending, net) && _pendingSlotEvents.Count < 128) _pendingSlotEvents[eventId] = pending;
+    }
+
+    private bool TryApplySlotEvent(PendingSlotEvent pending, NetManager net)
+    {
+        byte ev = pending.Op; string slotIdx = pending.Slot, cardId = pending.Card;
+        var slots = UnityEngine.Object.FindObjectsOfType<ItemSlot>(true);
         var cards = UnityEngine.Object.FindObjectsOfType<PunchcardRuntime>(true); // includeInactive
         CoopRuntime.LogSource?.LogInfo($"[PunchcardSync] recv CardSlotEvent ev={ev} slot={slotIdx} card='{cardId}' nSlots={(slots?.Length ?? 0)} nCards={(cards?.Length ?? 0)}");
-        if (slots == null || slots.Length == 0) return;
-        if (slotIdx >= slots.Length || slots[slotIdx] == null) return;
+        if (slots == null || slots.Length == 0) return false;
+        ItemSlot destination = null;
+        foreach (var slot in slots) if (slot != null && SlotKey(slot) == slotIdx) { if (destination != null) throw new InvalidOperationException("Ambiguous requisition slot"); destination = slot; }
+        if (destination == null) return false;
         var card = FindCardById(cardId, cards);
         if (card == null)
         {
             // 客机端缺该卡牌（生成不一致）：诊断（无法购买）
-            CoopRuntime.LogSource?.LogWarning($"[PunchcardSync] apply CardSlotEvent card NOT FOUND id='{cardId}' nCards={(cards?.Length ?? 0)}");
-            return;
+            return false;
         }
         IsApplyingCard = true;
         try
         {
             if (ev == 1)
             {
-                slots[slotIdx].PlaceItem(card.DraggableItem);
+                destination.PlaceItem(card.DraggableItem);
                 CoopRuntime.LogSource?.LogInfo($"[PunchcardSync] apply PlaceItem slot={slotIdx} card='{cardId}'");
             }
             else if (ev == 2)
             {
-                slots[slotIdx].RemoveItem(card.DraggableItem);
+                destination.RemoveItem(card.DraggableItem);
                 CoopRuntime.LogSource?.LogInfo($"[PunchcardSync] apply RemoveItem slot={slotIdx} card='{cardId}'");
             }
         }
-        catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"PunchcardSync ApplyCardSlotEvent: {ex.Message}"); }
+        catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"PunchcardSync ApplyCardSlotEvent: {ex.Message}"); return false; }
         finally { IsApplyingCard = false; }
+        _seenSlotEvents.Add(pending.Id);
+        if (net.IsHost)
+        {
+            var writer = NetProtocol.Begin((MsgType)CardSlotEventMsgType);
+            writer.Put(ev); writer.Put(slotIdx); writer.Put(cardId); writer.Put(pending.Id);
+            var packet = NetProtocol.Snapshot(writer);
+            foreach (var peer in net.Roster) if (!peer.IsLocal && (ulong)peer.SteamId != pending.From) net.Transport.Send(peer.SteamId, packet, true);
+        }
+        return true;
     }
 
     public void OnPacket(ulong from, byte[] data)
     {
         var net = CoopRuntime.Net;
         if (net == null) return;
+        bool member = false;
+        foreach (var peer in net.Roster) if (!peer.IsLocal && (ulong)peer.SteamId == from) member = true;
+        if (!member || (!net.IsHost && from != net.HostSteamId)) return;
         try
         {
             var r = new NetDataReader(data);
@@ -534,7 +551,7 @@ public sealed class PunchcardSync : ISyncedModule
     {
         try
         {
-            var d = c.GetComponent<DraggableItem>();
+            var d = c.DraggableItem ?? c.GetComponent<DraggableItem>() ?? c.GetComponentInChildren<DraggableItem>(true);
             return d != null && d.IsBeingDragged;
         }
         catch { return false; }
@@ -575,7 +592,8 @@ public sealed class PunchcardSync : ISyncedModule
     }
 
     
-    public void OnSessionStarted() { }
+    public void OnSessionStarted() { _hostCardSig = null; _cardListHeartbeat = 4f; }
+    public void OnLateJoin(ulong steamId) { _hostCardSig = null; _hostSig.Clear(); _cardListHeartbeat = 4f; }
     public void OnSessionEnded() { Reset(); }
-    public void Reset() { _timer = 0f; _applying = false; _hostSig.Clear(); _dragState.Clear(); }
+    public void Reset() { _timer = 0f; _applying = false; _hostSig.Clear(); _dragState.Clear(); _hostCardSig = null; _pendingHostCards = null; _seenSlotEvents.Clear(); _pendingSlotEvents.Clear(); _cardListHeartbeat = 0; _cache = null; _slotCache = null; }
 }

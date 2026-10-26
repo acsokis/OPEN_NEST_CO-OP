@@ -34,6 +34,7 @@ public sealed class MapMarkerSync : ISyncedModule
     private static readonly Dictionary<string, GameObject> _markers = new();
     // 远端拖拽中的临时 marker（kind -> GameObject）
     private static readonly Dictionary<string, GameObject> _dragMarkers = new();
+    private static readonly Dictionary<IntPtr, Vector2[]> _endpoints = new();
     // ⚠️ 2026-08-26 帧性能：MapMarkerPlacer 引用缓存（避免每 0.3s DetectLocalErase / 拖拽每帧
     // FindFirstObjectByType 全场景扫描——frame.log MapMarkerSync 13-17ms/s 大头）。场景切换/丢失刷新。
     private static MapMarkerPlacer _placerCache;
@@ -42,10 +43,11 @@ public sealed class MapMarkerSync : ISyncedModule
     /// <summary>MapMarkerPlacer 引用缓存（场景切换/丢失刷新，避免高频全场景 Find）。</summary>
     private static MapMarkerPlacer GetPlacer()
     {
-        int sc = UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex;
+        int sc = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
         if (_placerCache == null || sc != _placerScene)
         {
             _placerCache = UnityEngine.Object.FindFirstObjectByType<MapMarkerPlacer>();
+            if (sc != _placerScene) { _endpoints.Clear(); _markers.Clear(); _dragMarkers.Clear(); }
             _placerScene = sc;
         }
         return _placerCache;
@@ -72,7 +74,33 @@ public sealed class MapMarkerSync : ISyncedModule
     [HarmonyLib.HarmonyPatch(typeof(MapMarkerLineUI), "UpdateLine")]
     private static class UpdateLinePatch
     {
+        private static void Prefix(MapMarkerLineUI __instance, Vector2 originLocal, Vector2 targetLocal)
+        {
+            GetPlacer();
+            // Keep the actual native map-space inputs. TipLocalPosition is an
+            // implementation detail of the rendered marker, not a wire endpoint.
+            _endpoints[__instance.Pointer] = new[] { originLocal, targetLocal };
+        }
         private static void Postfix(MapMarkerLineUI __instance) => OnMarkerLineUpdate(__instance);
+    }
+
+    private static bool Endpoints(MapMarkerLineUI marker, out Vector2 origin, out Vector2 target)
+    {
+        if (_endpoints.TryGetValue(marker.Pointer, out var points)) { origin = points[0]; target = points[1]; return true; }
+        var placer = GetPlacer();
+        if (placer != null && placer.placedMarkers != null)
+        {
+            var native = new Il2CppSystem.Collections.Generic.List<MapMarkerSaveData>();
+            placer.CaptureMarkers(0, native);
+            var placed = new List<MapMarkerLineUI>();
+            foreach (var item in placer.placedMarkers) if (item != null) placed.Add(item);
+            if (native.Count == placed.Count)
+                for (int i = 0; i < native.Count; i++)
+                    if (native[i] != null) _endpoints[placed[i].Pointer] = new[] { (Vector2)native[i].Origin, (Vector2)native[i].Target };
+        }
+        if (_endpoints.TryGetValue(marker.Pointer, out points)) { origin = points[0]; target = points[1]; return true; }
+        origin = target = Vector2.zero;
+        return false; // no guessed tip offset: skip and retry a native snapshot
     }
 
     /// <summary>拖拽中每帧调用（节流 0.1s 广播实时画线）。</summary>
@@ -89,9 +117,7 @@ public sealed class MapMarkerSync : ISyncedModule
             if (now - _lastDragSend < 0.1f) return;
             _lastDragSend = now;
             string kind = CleanName(marker.gameObject.name);
-            var origin = marker.OriginLocal;
-            var tip = marker.TipLocalPosition;
-            Vector2 target = new Vector2(origin.x + tip.x, origin.y + tip.y);
+            if (!Endpoints(marker, out var origin, out var target)) return;
             SendMarker(kind, origin, target, "d_" + kind); // drag 标志
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"MapMarkerSync OnMarkerLineUpdate: {ex.Message}"); }
@@ -107,11 +133,8 @@ public sealed class MapMarkerSync : ISyncedModule
         try
         {
             string kind = CleanName(marker.gameObject.name);
-            string id = (net.Local?.SteamId ?? 0).ToString() + ":" + UnityEngine.Random.Range(0, 100000).ToString();
-            var origin = marker.OriginLocal;
-            var tip = marker.TipLocalPosition;
-            // tip 是相对 origin 的偏移；远端 UpdateLine 需要绝对 target = origin + tip
-            Vector2 target = new Vector2(origin.x + tip.x, origin.y + tip.y);
+            string id = (net.Local?.SteamId ?? 0).ToString() + ":" + Guid.NewGuid().ToString("N");
+            if (!Endpoints(marker, out var origin, out var target)) return;
             SendMarker(kind, origin, target, id);
             _markers[id] = marker.gameObject;
             CoopRuntime.LogSource?.LogInfo($"[MapMarkerSync] placed kind={kind} id={id}");
@@ -333,9 +356,8 @@ public sealed class MapMarkerSync : ISyncedModule
             }
             rt.anchoredPosition = origin;
             rt.localRotation = Quaternion.identity;
-            try { ui.Initialize(origin, placer.mapRect); } catch { }
-            try { ui.UpdateLine(origin, target, placer.mapRect); } catch { }
-            try { ui.FinalizePlacement(); } catch { }
+            ui.RestorePlacement(origin, target, placer.mapRect);
+            _endpoints[ui.Pointer] = new[] { origin, target };
             _markers[id] = go;
             // 该 kind 的拖拽临时 marker 已被正式 marker 替换，移除
             if (_dragMarkers.TryGetValue(kind, out var tmp) && tmp != null)
@@ -414,8 +436,8 @@ public sealed class MapMarkerSync : ISyncedModule
             if (_markers.Count == 0) return null;
             var valid = new List<KeyValuePair<string, GameObject>>();
             foreach (var entry in _markers)
-                if (entry.Value != null && entry.Value.GetComponent<MapMarkerLineUI>() != null)
-                    valid.Add(entry);
+                if (entry.Value != null && entry.Value.GetComponent<MapMarkerLineUI>() != null
+                    && Endpoints(entry.Value.GetComponent<MapMarkerLineUI>(), out _, out _)) valid.Add(entry);
             if (valid.Count == 0) return null;
             var w = NetProtocol.Begin((MsgType)107);
             w.Put((byte)Math.Min(valid.Count, 255));
@@ -429,9 +451,7 @@ public sealed class MapMarkerSync : ISyncedModule
                 if (ui == null) continue;
                 written++;
                 string kind = CleanName(go.name);
-                var origin = ui.OriginLocal;
-                var tip = ui.TipLocalPosition;
-                Vector2 target = new Vector2(origin.x + tip.x, origin.y + tip.y);
+                if (!Endpoints(ui, out var origin, out var target)) continue;
                 w.Put(kind);
                 w.Put(origin.x); w.Put(origin.y);
                 w.Put(target.x); w.Put(target.y);
@@ -466,5 +486,5 @@ public sealed class MapMarkerSync : ISyncedModule
 
     public void OnSessionStarted() { EnsureHook(); }
     public void OnSessionEnded() { Reset(); }
-    public void Reset() { _markers.Clear(); }
+    public void Reset() { _markers.Clear(); _endpoints.Clear(); _dragMarkers.Clear(); }
 }

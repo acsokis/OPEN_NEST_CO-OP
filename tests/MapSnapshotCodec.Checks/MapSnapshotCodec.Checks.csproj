@@ -10,5 +10,12 @@
     <Compile Include="../../src/OpenNestCoop/GameSync/SessionAuthority.cs" Link="SessionAuthority.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/ManagedStateCodec.cs" Link="ManagedStateCodec.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/SharedDocumentStore.cs" Link="SharedDocumentStore.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/ReliableDocumentSync.cs" Link="ReliableDocumentSync.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/GunKeyOrder.cs" Link="GunKeyOrder.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/MapPanelCommand.cs" Link="MapPanelCommand.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/WorldControlIntent.cs" Link="WorldControlIntent.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/ScoutSyncModels.cs" Link="ScoutSyncModels.cs" />
+    <Compile Include="../../src/OpenNestCoop/Net/LocalTransport.cs" Link="LocalTransport.cs" />
+    <Compile Include="../../src/OpenNestCoop/Net/ITransport.cs" Link="ITransport.cs" />
   </ItemGroup>
 </Project>

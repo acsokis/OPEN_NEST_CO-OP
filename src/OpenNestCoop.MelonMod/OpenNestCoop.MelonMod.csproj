@@ -7,7 +7,7 @@
     <AssemblyName>OpenNestCoop.MelonMod</AssemblyName>
     <RootNamespace>OpenNestCoop</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>0.2.1-syncfix.10.1</Version>
+    <Version>0.2.1-syncfix.11</Version>
     <!-- MELONLOADER 条件编译：PlatformUsings.cs 据此做 interop 命名空间 global using 适配 -->
     <DefineConstants>$(DefineConstants);MELONLOADER</DefineConstants>
     <!-- 与 BepInEx 版共用同一份源码；仅入口不同（本工程编 MelonModEntry 壳，排除 BepInEx 的 Plugin.cs） -->
@@ -80,6 +80,7 @@
     <Reference Include="Il2CppSystem.Net.Http" HintPath="$(MLBase)\MelonLoader\Il2CppAssemblies\Il2CppSystem.Net.Http.dll" Private="false" />
     <Reference Include="Il2CppNewtonsoft.Json" HintPath="$(MLBase)\MelonLoader\Il2CppAssemblies\Il2CppNewtonsoft.Json.dll" Private="false" />
     <Reference Include="Assembly-CSharp" HintPath="$(MLBase)\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll" Private="false" />
+    <Reference Include="Il2CppFMODUnity" HintPath="$(MLBase)\MelonLoader\Il2CppAssemblies\Il2CppFMODUnity.dll" Private="false" />
     <Reference Include="Il2Cppcom.rlabrecque.steamworks.net" HintPath="$(MLBase)\MelonLoader\Il2CppAssemblies\Il2Cppcom.rlabrecque.steamworks.net.dll" Private="false" />
   </ItemGroup>
 
