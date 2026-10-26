@@ -4,6 +4,11 @@ $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $changes=git -C $repo status --porcelain
 if($LASTEXITCODE -or $changes){throw 'A clean Git checkout is required for matching corresponding source.'}
 $project=Join-Path $repo 'src\OpenNestCoop.MelonMod\OpenNestCoop.MelonMod.csproj'
+$xml=[xml][IO.File]::ReadAllText($project)
+$projectVersion=$xml.SelectSingleNode('/Project/PropertyGroup/Version').InnerText
+$netSource=[IO.File]::ReadAllText((Join-Path $repo 'src\OpenNestCoop\Core\NetConfig.cs'))
+$runtimeVersion=[regex]::Match($netSource,'const string Version\s*=\s*"([^"]+)"').Groups[1].Value
+if(-not $runtimeVersion -or $projectVersion -ne $runtimeVersion){throw 'Runtime/network version and package version differ; cancelled.'}
 dotnet build $project "-p:ClientGame=$GamePath" -p:DeployToMods=false --nologo -v:q
 if($LASTEXITCODE){throw 'Build failed'}
 $bin=Join-Path $repo 'src\OpenNestCoop.MelonMod\bin\Debug\net6.0'

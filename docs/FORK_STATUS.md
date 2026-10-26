@@ -5,7 +5,11 @@ contributed by Gabor Kocsis (@acsokis) with AI-assisted implementation.
 The upstream authors and AGPL-3.0 license are preserved. It is not a port of
 Jager2251's separate Iron Nest Co-op mod.
 
-Current experimental test version: **0.2.1-syncfix.10**.
+Current experimental test version: **0.2.1-syncfix.10.1**.
+
+Syncfix.10.1 corrects stale runtime/network version labels found during startup
+validation. MelonInfo now uses NetConfig.Version, and packaging rejects a
+runtime/package version mismatch. Use the syncfix.10.1 release rather than .10.
 
 Syncfix.10 adds a version-matched optional Modernization model bridge for intel,
 map selection/coordinates/measurements, native notes, radar contacts, fire plans
