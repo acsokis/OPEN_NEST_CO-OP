@@ -13,5 +13,5 @@ docs/SYNCFIX_REVIEW.md for scope, evidence, and known gaps.
 Validation: local MelonLoader compilation, nine snapshot codec checks, and package
 hash checks; syncfix.6 startup reached the main menu. Two-PC multiplayer validation is incomplete.
 This should be reviewed as a draft, not a verified stable release. Calculator
-card deletion, saved-map restoration, and BepInEx compatibility still need
-implementation or validation as detailed in the review document.
+card closure, saved-map restoration, and BepInEx compatibility still need
+runtime validation as detailed in the review document.

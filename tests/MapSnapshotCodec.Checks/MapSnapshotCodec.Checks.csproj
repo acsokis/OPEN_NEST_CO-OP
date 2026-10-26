@@ -6,5 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/OpenNestCoop/GameSync/MapSnapshotCodec.cs" Link="MapSnapshotCodec.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/CardReplicationState.cs" Link="CardReplicationState.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/SessionAuthority.cs" Link="SessionAuthority.cs" />
   </ItemGroup>
 </Project>

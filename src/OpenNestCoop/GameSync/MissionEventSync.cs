@@ -42,6 +42,7 @@ public sealed class MissionEventSync : ISyncedModule
             var net = CoopRuntime.Net;
             if (net == null) return;
             if (net.State != SessionState.Hosting && net.State != SessionState.Joined) return;
+            if (!net.IsHost) return; // guest navigation/outcomes never control the shared mission
             var w = NetProtocol.Begin((MsgType)130);
             w.Put(ev);
             w.Put(flag ? (byte)1 : (byte)0);
@@ -69,16 +70,13 @@ public sealed class MissionEventSync : ISyncedModule
     {
         var net = CoopRuntime.Net;
         if (net == null) return;
+        if (!SessionAuthority.AcceptHostState(net.IsHost, from == net.HostSteamId)) return;
         try
         {
             var r = new NetDataReader(data);
             r.GetByte(); // 跳过消息类型
             byte ev = r.GetByte();
             bool flag = r.GetByte() != 0;
-            // Automatic outcomes belong to the host; a guest's local timer or
-            // simulation must never fail or complete the shared mission.
-            if (net.IsHost && (ev == EvFinish || ev == EvComplete || ev == EvFailed)) return;
-            if (!net.IsHost && from != net.HostSteamId) return;
             if (net.IsHost)
             {
                 // 主机转发给其他客户端（星型拓扑）

@@ -743,6 +743,7 @@ public static class HarmonyPatches
 
     private static bool PreMissionReload()
     {
+        if (!PrepareLocalMissionNavigation()) return false;
         NotifyMissionEvent(MissionEventSync.EvReload, false);
         return true;
     }
@@ -756,14 +757,35 @@ public static class HarmonyPatches
 
     private static bool PreMissionReturnMap()
     {
+        if (!PrepareLocalMissionNavigation()) return false;
         NotifyMissionEvent(MissionEventSync.EvReturnMap, false);
         return true;
     }
 
     private static bool PreMissionEndOperation()
     {
+        if (!PrepareLocalMissionNavigation()) return false;
         NotifyMissionEvent(MissionEventSync.EvEndOperation, false);
         return true;
+    }
+
+    private static bool PrepareLocalMissionNavigation()
+    {
+        if (OpenNestCoop.Net.AutoJoin.WantNewSync) return true;
+        var net = CoopRuntime.Net;
+        if (net == null || !SessionAuthority.LeaveBeforeLocalNavigation(net.IsHost,
+                net.State == SessionState.Joined, MissionEventSync.IsApplying)) return true;
+        try
+        {
+            net.LeaveSession();
+            CoopRuntime.LogSource?.LogInfo("[MissionEvent] guest local navigation: left session without changing host mission");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            CoopRuntime.LogSource?.LogWarning($"[MissionEvent] guest disconnect failed: {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>任务过渡事件通知（方案感知）：--sync new 走 MissionEventSyncV2（EventLayer），默认 old 走 V1。</summary>

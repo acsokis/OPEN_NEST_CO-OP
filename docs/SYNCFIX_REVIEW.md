@@ -25,6 +25,14 @@ transfer control and publish its final drop.
 - Resolve shell prefabs from loaded definitions and support partially empty drums.
 - Add FireMissionCard creation and bidirectional dragging/drop surface state
   using native capture/restore APIs, with local drag/release protection.
+- Syncfix.9 replicates card closure with scene-scoped deletion tombstones,
+  rejects stale upserts after deletion, removes obsolete pending updates, and
+  skips identical native surface-state restores that could reopen closed views.
+- Syncfix.9 also rejects guest mission scene/seed and all guest lifecycle events;
+  local guest navigation disconnects before returning/reloading/ending locally.
+  The observed guest `ev=6` exit must not end the host's operation.
+  Card lifecycle tracking resets on scene handle/native mission instance changes
+  so unloading/reloading the same named mission does not send spurious deletions.
 - Add compressed native map initialization for dynamic photos/impact objects and
   saved token surface state; scene readiness and request correlation are checked.
 - Include native host drawings restored from a save in marker snapshots.
@@ -56,8 +64,9 @@ The local-only test was closed from the main menu and normal Steam launch restor
 - Confirm each drawing tool, measurement label/note, late join, and reconnect.
 - Native map restore, late join, and generated photo restoration need two-PC
   runtime validation. Mission progression/graphs are not restored by map transfer.
-- Calculator card creation and movement are implemented but need runtime testing;
-  deletion of destroyed calculator cards is not yet replicated by the new module.
+- Calculator card creation, movement, and closure are implemented but need
+  two-PC runtime testing. Explicit local deactivation of a previously active
+  printed card is treated as closure; unrelated parent visibility is ignored.
 - Verify counter-battery start/pause/expiry and exactly one host-driven impact;
   the current spawn path requires exactly one active cinematic spawner.
 - Verify both guns, loading, trajectory, impact, engine, and power switch.

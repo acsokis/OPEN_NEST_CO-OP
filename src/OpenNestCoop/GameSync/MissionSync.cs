@@ -107,6 +107,8 @@ public sealed class MissionSync : ISyncedModule
     {
         var net = CoopRuntime.Net;
         if (net == null) return;
+        // A joining/leaving guest's local scene/seed is not shared world state.
+        if (!SessionAuthority.AcceptHostState(net.IsHost, from == net.HostSteamId)) return;
         try
         {
             var r = new NetDataReader(data);

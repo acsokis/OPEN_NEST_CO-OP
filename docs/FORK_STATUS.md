@@ -5,7 +5,10 @@ contributed by Gabor Kocsis (@acsokis) with AI-assisted implementation.
 The upstream authors and AGPL-3.0 license are preserved. It is not a port of
 Jager2251's separate Iron Nest Co-op mod.
 
-Current local test version: **0.2.1-syncfix.8**.
+Current local test version: **0.2.1-syncfix.9**.
+
+Syncfix.9 adds scene-scoped calculator-card deletion and skips identical native
+state restores, preventing closed cards/views from being reopened by heartbeats.
 See [SYNCFIX_REVIEW.md](SYNCFIX_REVIEW.md) for implemented changes, evidence,
 validation, and outstanding work. This branch must not be presented as fully
 working multiplayer until the two-PC checks are complete.

@@ -59,7 +59,7 @@ try{
   [IO.Directory]::CreateDirectory((Split-Path $saved))|Out-Null
   Move-Item -LiteralPath $dll.FullName -Destination $saved
  }
- $results=@('Open Nest Co-op syncfix.8 installer revision 3',('Game: '+$game),('Backup: '+$backup))
+ $results=@('Open Nest Co-op syncfix.9 installer',('Game: '+$game),('Backup: '+$backup))
  foreach($item in $manifest){
   $dest=Join-Path $game $item.Path
   if(Test-Path -LiteralPath $dest){$saved=Join-Path $backup $item.Path;[IO.Directory]::CreateDirectory((Split-Path $saved))|Out-Null;Copy-Item -LiteralPath $dest -Destination $saved -Force}
@@ -70,18 +70,18 @@ try{
  }
  $installed=Join-Path $game 'Mods\OpenNestCoop.MelonMod.dll'
  $version=(Get-Item -LiteralPath $installed).VersionInfo.ProductVersion
- if($version -notlike '*syncfix.8*'){throw ('Varatlan telepitett verzio: '+$version)}
+ if($version -notlike '*syncfix.9*'){throw ('Varatlan telepitett verzio: '+$version)}
  $results+=('Installed product version: '+$version)
  $report=Join-Path $root 'TELEPITES_EREDMENY.txt'
  $results|Set-Content -LiteralPath $report -Encoding UTF8
- $desktopReport=Join-Path ([Environment]::GetFolderPath('Desktop')) 'IRON_NEST_UPDATE_8_EREDMENY.txt'
+ $desktopReport=Join-Path ([Environment]::GetFolderPath('Desktop')) 'IRON_NEST_UPDATE_9_EREDMENY.txt'
  if(-not $VerifyOnly){try{$results|Set-Content -LiteralPath $desktopReport -Encoding UTF8}catch{Write-Host 'Az Asztalra nem lehetett jelentest irni; a csomag mappajaban megvan.'}}
- Write-Host 'KESZ: Open Nest Co-op 0.2.1-syncfix.8.' -ForegroundColor Green
+ Write-Host 'KESZ: Open Nest Co-op 0.2.1-syncfix.9.' -ForegroundColor Green
  Write-Host 'Mindket gepen ezt telepitsetek, majd a host folytassa a mentest es nyisson uj szobat.'
  Write-Host 'A csomag jegyzekeben szereplo fajlok telepultek. HDR es jatekmentesek nem modosultak.'
  Write-Host ('Mentes: '+$backup)
  Write-Host ('ELLENORZOTT VERZIO: '+$version) -ForegroundColor Green
  Write-Host ('Jatek: '+$game)
  Write-Host ('Jelentes: '+$report)
- if(-not $VerifyOnly){[void][Windows.Forms.MessageBox]::Show(('ELLENORZOTT TELEPITES: '+$version+[Environment]::NewLine+$game+[Environment]::NewLine+'Inditsd ujra Steambol. A jelentest az Asztalon talalod: IRON_NEST_UPDATE_8_EREDMENY.txt'),'Co-op javitas kesz')}
+ if(-not $VerifyOnly){[void][Windows.Forms.MessageBox]::Show(('ELLENORZOTT TELEPITES: '+$version+[Environment]::NewLine+$game+[Environment]::NewLine+'Inditsd ujra Steambol. A jelentest az Asztalon talalod: IRON_NEST_UPDATE_9_EREDMENY.txt'),'Co-op javitas kesz')}
 }catch{Write-Host ('HIBA: '+$_.Exception.Message) -ForegroundColor Red;if(-not $VerifyOnly){[void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'SIKERTELEN telepites')};exit 1}

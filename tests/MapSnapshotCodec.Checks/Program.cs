@@ -27,4 +27,29 @@ Reject(() => MapSnapshotCodec.Decode(output.ToArray()));
 var random = new byte[MapSnapshotCodec.MaxCompressed + 10000];
 new Random(1234).NextBytes(random);
 Reject(() => MapSnapshotCodec.Encode(random));
-Console.WriteLine($"{passed} map snapshot codec checks passed");
+var cards = new CardReplicationState();
+Check(cards.ShouldApply("card-a", "position-a"));
+cards.Applied("card-a", "position-a");
+Check(!cards.ShouldApply("card-a", "position-a")); // identical heartbeat: no native UI restore
+Check(cards.ShouldApply("card-a", "position-b")); // actual movement still applies
+Check(cards.Delete("card-a"));
+Check(!cards.Delete("card-a")); // duplicate deletion is idempotent
+Check(!cards.ShouldApply("card-a", "position-a")); // queued pre-close packet
+Check(!cards.ShouldApply("card-a", "position-b")); // delayed movement packet
+cards.Applied("card-a", "position-c");
+Check(!cards.ShouldApply("card-a", "position-c")); // cannot resurrect by recording an upsert
+Check(cards.ShouldApply("card-b", "new-card")); // other cards unaffected
+Check(cards.Deleted.SequenceEqual(new[] { "card-a" }));
+Check(!cards.Delete(""));
+cards.Reset();
+Check(cards.ShouldApply("card-a", "position-a")); // a new scene/session has independent lifecycle
+Check(!cards.Deleted.Any());
+Check(!SessionAuthority.AcceptHostState(true, false)); // guest cannot reset host
+Check(!SessionAuthority.AcceptHostState(true, true)); // host never applies remote mission state
+Check(!SessionAuthority.AcceptHostState(false, false)); // other guests cannot control this guest
+Check(SessionAuthority.AcceptHostState(false, true)); // host navigation still replicates
+Check(SessionAuthority.LeaveBeforeLocalNavigation(false, true, false));
+Check(!SessionAuthority.LeaveBeforeLocalNavigation(false, true, true)); // applying host event keeps session
+Check(!SessionAuthority.LeaveBeforeLocalNavigation(true, true, false)); // host stays in charge
+Check(!SessionAuthority.LeaveBeforeLocalNavigation(false, false, false)); // single player unchanged
+Console.WriteLine($"{passed} snapshot, card lifecycle, and mission authority checks passed");

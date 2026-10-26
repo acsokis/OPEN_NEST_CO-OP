@@ -1,6 +1,6 @@
 # OPEN-NEST-CO-OP-
 
-> **acsokis experimental syncfix fork (0.2.1-syncfix.8).**
+> **acsokis experimental syncfix fork (0.2.1-syncfix.9).**
 > This fork contains AI-assisted co-op interoperability repairs contributed by
 > Gabor Kocsis (@acsokis). It is not an official upstream release and full
 > two-PC synchronization is still being tested. See [fork status and build instructions](docs/FORK_STATUS.md).
