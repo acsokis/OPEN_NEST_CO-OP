@@ -1,5 +1,11 @@
 # Open Nest Co-op — acsokis syncfix.11.1
 
+The original mod promised a lot, but in our co-op sessions player-to-player
+synchronization did not work reliably for us: maps, cards, controls and mission
+timing could diverge. That is why I started fixing the issues we encountered and
+building this fork. This describes our experience, not every player's setup;
+the changes below do not mean every sync issue has been resolved.
+
 Experimental **MelonLoader 0.7.3 x64** fork of Open Nest Co-op by 1499501762 and
 upstream contributors. Fork contributions by Gabor Kocsis (@acsokis), with
 AI-assisted implementation. AGPL-3.0 and dependency notices are preserved.
@@ -69,3 +75,18 @@ coverage is not established. Read [validation](SYNCFIX_11_TEST_HU.md),
 Exact gameplay binary/source commit: `d410603044326fee17dfa39bb285353fd5506b16`.
 [Corresponding source](https://github.com/acsokis/OPEN_NEST_CO-OP/archive/refs/tags/syncfix.11.1.zip).
 Later main-branch documentation commits do not change those binary assets.
+
+## Our play-session companion mods
+
+Required: MelonLoader 0.7.3 x64 and this fork. Our recommended companion is
+[Modernization by N2774](https://www.nexusmods.com/ironnest/mods/82), local package
+2026.10.13.1: Handheld 0.7.46, Bearing 0.8.6, Map Display 0.6.18, Report Screens
+0.4.19 and Automatic Coffee 0.1.9. Both PCs need matching builds for that bridge.
+
+Optional modules loaded in our setup: Cat Collision 0.1.0, High Tide 40 0.1.2 and
+Record Rider 0.1.0. Their complete co-op effects are not certified. HDR at a
+1050-nit target was a personal LG G2 visual setup, not a requirement for other
+players. F6 Mod Menu is not recommended as required; a freeze was reported.
+
+Read the [full setup and evidence boundaries](https://github.com/acsokis/OPEN_NEST_CO-OP/blob/main/docs/COMPANION_MODS.md).
+Companion mods and HDR are not included in this release.

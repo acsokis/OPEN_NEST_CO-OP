@@ -1,5 +1,8 @@
 Open Nest Co-op - acsokis Syncfix Fork (MelonLoader)
 
+WHY I STARTED THIS FORK
+The original mod promised a lot, but during our co-op sessions the player-to-player synchronization did not work reliably for us. Maps, cards, controls and mission timing could drift apart, and several advertised shared features did not behave as expected. Rather than leave it there, I started fixing the problems we actually encountered and building this updated fork. This is our experience with the original build, not a claim about every player's setup. The changes and remaining limitations are listed below; I am not claiming that every synchronization issue is now solved.
+
 WHAT IS SHARED / HOW CO-OP WORKS
 Work as one turret crew with a shared tactical workspace. Both the host and guests can make supported edits; the host maintains the common accepted state and drives automatic mission outcomes.
 
@@ -71,3 +74,28 @@ Fork and full changelog: https://github.com/acsokis/OPEN_NEST_CO-OP
 Exact binary/source release: https://github.com/acsokis/OPEN_NEST_CO-OP/releases/tag/syncfix.11.1
 Corresponding source: https://github.com/acsokis/OPEN_NEST_CO-OP/archive/refs/tags/syncfix.11.1.zip
 Co-op source license: AGPL-3.0. LiteNetLib and SharpGLTF library notices are included separately. No modified Jager2251 binaries or source are included.
+
+OUR PLAY-SESSION MOD SETUP / RECOMMENDED COMPANIONS
+These are the modules loaded and used in our local play/test setup, not a blanket compatibility certification. Some co-op paths had bugs during those sessions and remain under test. The listed versions are the loader-reported module versions; they are not the generic Windows DLL product version.
+
+Required: MelonLoader 0.7.3 x64 and this Open Nest Co-op syncfix fork. MelonLoader is installed separately: https://github.com/LavaGang/MelonLoader/releases/tag/v0.7.3
+
+Our main recommended companion is Iron Nest Modernization Mod by N2774, using the local 2026.10.13.1 package. It provides the handheld/map/fire-control workspace used in our sessions. Download it from its original author: https://www.nexusmods.com/ironnest/mods/82
+It is optional for basic co-op, but required on both PCs if you want this fork's Modernization-specific shared-data features. Match the same package on both PCs; do not mix module versions.
+
+Modernization modules observed in our setup:
+- Iron Nest Handheld 0.7.46 (IronNestHandheld.dll): handheld intel, notes/target/fire-plan workspace; the supported model-sharing bridge targets this installed build.
+- Iron Nest Bearing 0.8.6 (IronNestBearing.dll): aiming/bearing tooling used alongside the handheld setup.
+- Iron Nest Map Display 0.6.18 (IronNestMapDisplay.dll): map display and supported purchase-panel integration.
+- Iron Nest Report Screens 0.4.19 (IronNestReports.dll): report/briefing screen module.
+- Iron Nest Automatic Coffee 0.1.9 (IronNestCoffee.dll): optional coffee convenience module.
+
+Additional optional modules loaded during our sessions:
+- Iron Nest Cat Collision 0.1.0 (IronNestCatCollision.dll): cat collision gameplay change. The cat being visible does not prove the collision effect is synchronized; we previously reported that mismatch.
+- Iron Nest High Tide 40 0.1.2 (IronNestHighTide.dll): changes the High Tide mission schedule to 40 transports in its original 900-second assault window. Use matching versions on both PCs and start a new High Tide mission for that schedule.
+- Iron Nest Record Rider 0.1.0 (IronNestRecordRider.dll): optional record-player-related gameplay module. Loaded in our setup; complete co-op interaction coverage is not verified.
+
+Personal visuals only: a local HDR/ReShade configuration, IronNest_HDR1050.ini with AutoHDR.addon64, was used for an LG G2 at a 1050-nit target. This is not required for co-op, was not required on the other player's PC, and is not bundled or offered as a universal display preset.
+Open Nest Mod Menu/F6 was tried earlier but is not part of the current recommended set; an F6 freeze was reported. Do not treat it as a must-have dependency.
+
+Only the loader and this co-op fork are mandatory for the base setup. Optional gameplay changes should match across players. Companion mods are not redistributed in this release; use their authors' downloads and setup instructions. Loaded/used together is not the same as every effect being synchronized or a complete two-PC pass.
