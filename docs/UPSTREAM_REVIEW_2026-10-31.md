@@ -8,10 +8,11 @@ The annotated v0.2.1-Alpha-3 tag peels to that same commit. There is no new sour
 delta to merge from this upstream. The latest published GitHub release returned
 by its releases API is v0.2.1-Alpha-2; source tags and release assets are distinct.
 
-Our latest public release remains syncfix.11. The local syncfix.11.1 hardening
-work is not a published release. On this review date its 30 package-safety checks
-passed and the local MelonLoader build completed with zero errors; packaging,
-installer regression and public-asset verification must still be completed.
+At the start of the review the latest public fork release was syncfix.11.
+Syncfix.11.1 was subsequently built, installed with backup and published with
+selected independently implemented magazine fixes and release hardening.
+148 managed/network and 31 package-safety checks pass, as do package, isolated
+installer and public-download checks. New native gameplay paths remain unverified.
 
 ## Separate BepInEx implementation
 

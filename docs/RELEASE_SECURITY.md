@@ -1,6 +1,6 @@
 # Release hardening
 
-The local syncfix.11.1 work hardens the release execution path. It does not
+The syncfix.11.1 release hardens the execution path. It does not
 certify this software or any third-party dependency as malware-free.
 
 ## Implemented controls
@@ -23,12 +23,16 @@ certify this software or any third-party dependency as malware-free.
 
 ## Verification as of 2026-10-31
 
-Thirty defensive tests pass, including malformed paths, incomplete/duplicate
+Thirty-one defensive tests pass, including malformed paths, incomplete/duplicate
 manifests, altered hashes, unexpected payloads, ZIP links, archive size limits,
 duplicate archive names and actual junction rejection. The local MelonLoader
-build succeeds with zero errors. Full package generation, installation-fixture
-regression and public download verification for .11.1 are still pending.
-The currently published syncfix.11 package predates these hardening changes.
+build succeeds with zero errors. Full package generation and archive validation
+passed. An isolated installer fixture verified all nine payload hashes, duplicate
+backup and HDR/save sentinel preservation. Installation in the local game passed
+the file checker with a backup. Public ZIP/CMD digests, the embedded updater ZIP
+pin and updater script syntax were verified after download. A local Microsoft
+Defender custom ZIP scan reported no threats. No files were uploaded to an
+external malware-scanning service. Older syncfix.11 packages predate these checks.
 
 ## Trust boundaries
 

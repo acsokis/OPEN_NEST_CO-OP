@@ -5,12 +5,13 @@ contributed by Gabor Kocsis (@acsokis) with AI-assisted implementation.
 The upstream authors and AGPL-3.0 license are preserved. It is not a port of
 Jager2251's separate Iron Nest Co-op mod.
 
-Current experimental test version: **0.2.1-syncfix.11** (MelonLoader).
+Current experimental test version: **0.2.1-syncfix.11.1** (MelonLoader).
 
-Update candidate: **0.2.1-syncfix.11.1**, reviewed on 2026-10-31. Independent
+Published update: **0.2.1-syncfix.11.1**, reviewed on 2026-10-31. Independent
 magazine turn acceptance/queuing, deferred host magazine correction and entity
 authority guards are implemented. The build passes, with 148 managed/network
-checks and 30 package-safety checks. Native gameplay remains unverified for
+checks and 31 package-safety checks. Package/installer/public download checks
+passed; a local Defender ZIP scan found no threats. Native gameplay remains unverified for
 these new paths. See [upstream review](UPSTREAM_REVIEW_2026-10-31.md),
 [release security](RELEASE_SECURITY.md) and the [changelog](../CHANGELOG.md).
 
@@ -25,7 +26,7 @@ endpoints, exact requisition card/slot routing and experimental scout replicatio
 These implementations do not establish complete native or two-PC coverage.
 See [current validation and limitations](SYNCFIX_11_TEST_HU.md).
 
-Download the new `IRON_NEST_UPDATE.cmd` from release syncfix.11. Old updater
+Download the new `IRON_NEST_UPDATE.cmd` from release syncfix.11.1. Old updater
 copies remain pinned to their old release, so replace the CMD itself on both PCs.
 No HDR, Modernization implementation, personal saves or private logs are bundled.
 

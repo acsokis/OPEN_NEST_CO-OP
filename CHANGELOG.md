@@ -8,14 +8,18 @@ a port of the separate BepInEx co-op mod.
 The fork starts from upstream
 [`f49a188`](https://github.com/1499501762/OPEN_NEST_CO-OP/commit/f49a18863adb69b1401689843d08015e2d8eec8a)
 (v0.2.1-Alpha-3 source snapshot). The entries below cover the committed fork
-changes through syncfix.11. Earlier private syncfix.1-.6 builds are not separate
+changes through syncfix.11.1. Earlier private syncfix.1-.6 builds are not separate
 commits in this history, so their contents and test results are not reconstructed
-as releases here. All fork commits listed below were made on **2026-10-26**.
+as releases here. Initial fork changes were committed on **2026-10-26**;
+the .11.1 update follows on **2026-10-31**.
 
 “Implemented” describes code changes. It does not mean every native game path or
 two-PC session has passed. See [current validation](docs/SYNCFIX_11_TEST_HU.md).
 
-## Unreleased — syncfix.11.1 update and hardening
+## 0.2.1-syncfix.11.1 — 2026-10-31
+
+[Release](https://github.com/acsokis/OPEN_NEST_CO-OP/releases/tag/syncfix.11.1).
+Binary/source commit: `d410603044326fee17dfa39bb285353fd5506b16`.
 
 - Independently implement selected magazine fixes motivated by the separate
   2.5.1 release notes: publish only native-accepted turns, queue incoming actions
@@ -32,8 +36,10 @@ two-PC session has passed. See [current validation](docs/SYNCFIX_11_TEST_HU.md).
 - Pin updater ZIP hashes at build time; check release identity and download URL.
 - Add exact payload/archive allowlists, complete hash manifests, bounded safe
   extraction and junction/reparse-point rejection. Preserve wrapper exit codes.
-- Add 30 passing release-safety checks. Local build passes; full .11.1 package,
-  installer and public download validation remain pending. See
+- Add 31 passing release-safety checks. Build, package archive validation,
+  nine-file installer fixture, actual game-folder hash checks and public asset
+  digest/updater pin verification pass. Local Microsoft Defender ZIP scan found
+  no threats; this is not a malware-free certification. See
   [release security](docs/RELEASE_SECURITY.md).
 - [2026-10-31 upstream review](docs/UPSTREAM_REVIEW_2026-10-31.md): Open Nest
   remains at the inherited `f49a188`; the separate BepInEx mod is at 2.5.1.

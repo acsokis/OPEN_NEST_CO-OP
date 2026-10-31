@@ -10,7 +10,7 @@
 Fork history: [CHANGELOG.md](CHANGELOG.md), from the inherited upstream commit
 through syncfix.11.1. [Current validation](docs/SYNCFIX_11_TEST_HU.md) distinguishes
 implemented changes from automated checks and native gameplay confirmation.
-The .11.1 candidate adds independent magazine fixes and
+The .11.1 release adds independent magazine fixes and
 [release hardening](docs/RELEASE_SECURITY.md); it does not contain or fully port
 the separate BepInEx 2.5.1 implementation.
 
