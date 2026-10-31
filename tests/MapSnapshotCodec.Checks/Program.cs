@@ -55,6 +55,26 @@ Check(!SessionAuthority.LeaveBeforeLocalNavigation(false, false, false)); // sin
 passed += ManagedChecks.Run(args);
 passed += DocumentNetworkChecks.Run();
 passed += await LocalTransportChecks.Run();
+var magazine = new MagazineActionQueue(); var magazineApplied = new List<string>();
+Check(!MagazineActionQueue.AcceptedMove(true, true)); // native ignored busy press
+Check(!MagazineActionQueue.AcceptedMove(false, false)); // native rejected press
+Check(MagazineActionQueue.AcceptedMove(false, true));
+Check(magazine.Add("left", 2, 0, () => magazineApplied.Add("L1")));
+Check(magazine.Add("left", 2, 0, () => magazineApplied.Add("L2")));
+Check(magazine.Add("right", 2, 0, () => magazineApplied.Add("R1")));
+magazine.Tick(1, (gun, action) => gun == "right", _ => throw new Exception("Early expiry"));
+Check(magazineApplied.SequenceEqual(new[] { "R1" }) && magazine.Count == 2);
+int magazineTurns = 0;
+magazine.Tick(2, (_, _) => ++magazineTurns == 1, _ => throw new Exception("Early expiry"));
+Check(magazineApplied.SequenceEqual(new[] { "R1", "L1" }) && magazine.Count == 1);
+magazine.Tick(3, (_, _) => true, _ => throw new Exception("Early expiry"));
+Check(magazineApplied.Last() == "L2" && magazine.Count == 0);
+int magazineExpired = 0; magazine.Add("left", 2, 0, null);
+magazine.Tick(8, (_, _) => throw new Exception("Expired action executed"), _ => magazineExpired++);
+Check(magazineExpired == 1 && magazine.Count == 0);
+for (int i = 0; i < 128; i++) if (!magazine.Add("left", 2, 0, null)) throw new Exception("Magazine queue rejected within capacity");
+Check(!magazine.Add("left", 2, 0, null));
+magazine.Reset(); Check(magazine.Count == 0);
 var hostOrder = GunKeyOrder.Canonical(new[] { "Turret/GunLeft", "Turret/GunRight" });
 var reversedGuestOrder = GunKeyOrder.Canonical(new[] { "Turret/GunRight", "Turret/GunLeft" });
 Check(hostOrder.SequenceEqual(reversedGuestOrder));

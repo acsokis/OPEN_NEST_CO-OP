@@ -15,16 +15,21 @@ try {
  if($user.login -ne 'acsokis'){throw 'Unexpected GitHub account; publish cancelled'}
  $commit=git -C $Repo rev-parse HEAD
  $version=(Get-Item -LiteralPath (Join-Path $Repo 'src\OpenNestCoop.MelonMod\bin\Debug\net6.0\OpenNestCoop.MelonMod.dll')).VersionInfo.ProductVersion
- if(($version -split '\+',2)[0] -ne '0.2.1-syncfix.11' -or -not $version.Contains($commit)){throw 'Release binary is not built from current syncfix.11 commit'}
+ if(($version -split '\+',2)[0] -ne '0.2.1-syncfix.11.1' -or -not $version.Contains($commit)){throw 'Release binary is not built from current syncfix.11.1 commit'}
  $zip=Join-Path $Repo ('artifacts\OpenNestCoop-'+$version+'.zip')
  if(-not(Test-Path -LiteralPath $zip)){throw 'Package missing'}
- $releaseZip=Join-Path $Repo 'artifacts\OPEN_NEST_SYNCFIX_11.zip'
+ $releaseZip=Join-Path $Repo 'artifacts\OPEN_NEST_SYNCFIX_11_1.zip'
  Copy-Item -LiteralPath $zip -Destination $releaseZip -Force
  $cmd=Join-Path $Repo 'artifacts\IRON_NEST_UPDATE.cmd'
  $cmdText=[IO.File]::ReadAllText((Join-Path $Repo 'scripts\syncfix\Update-From-GitHub.cmd'))
+ $cmdText=$cmdText.Replace('# EMBEDDED_PACKAGE_SAFETY',[IO.File]::ReadAllText((Join-Path $Repo 'scripts\syncfix\Package-Safety.ps1'))).Replace('__PACKAGE_SHA256__',(Get-FileHash -LiteralPath $releaseZip -Algorithm SHA256).Hash)
  [IO.File]::WriteAllText($cmd,($cmdText -replace "`r?`n","`r`n"),[Text.Encoding]::ASCII)
  $body=@'
-Experimental acsokis fork: 0.2.1-syncfix.11, contributed by Gabor Kocsis (@acsokis) with AI-assisted implementation. Upstream attribution and AGPL-3.0 are preserved.
+Experimental acsokis fork: 0.2.1-syncfix.11.1 release hardening, contributed by Gabor Kocsis (@acsokis) with AI-assisted implementation. Upstream attribution and AGPL-3.0 are preserved.
+
+Also adds independently implemented magazine improvements: native-accepted turn filtering, per-gun queued retries, bounded/deduplicated mission-scoped actions and deferred host magazine corrections. Entity health/lifecycle and magazine state reject guest overwrites. 148 managed/network checks and 30 package-safety checks pass. This is not a full port of the separate BepInEx 2.5.1 mod; native gameplay verification and newer game-mechanic coverage remain incomplete.
+
+The new updater pins the ZIP hash at build time as well as checking GitHub's digest. Archive extraction rejects unexpected/duplicate paths, links, traversal, alternate data streams and oversized content. Installation restricts files to an exact allowlist, checks manifest completeness and refuses reparse-point destinations. These are hardening measures, not a malware-free certification or a substitute for trusting the downloaded updater itself. See docs/RELEASE_SECURITY.md and CHANGELOG.md.
 
 Download the NEW IRON_NEST_UPDATE.cmd and run it with Iron Nest closed on both PCs. Older copies remain pinned to older releases. This command downloads the release ZIP, verifies GitHub's SHA256 digest, backs up replaced co-op files and installs IRON_NEST_ELLENORZES.cmd in the game directory.
 
@@ -38,9 +43,9 @@ The public ZIP includes corresponding committed source and license. It excludes 
 '@
  $base='https://api.github.com/repos/acsokis/OPEN_NEST_CO-OP'
  $release=$null
- try{$release=Invoke-RestMethod -Uri ($base+'/releases/tags/syncfix.11') -Headers $headers}catch{if([int]$_.Exception.Response.StatusCode -ne 404){throw}}
+ try{$release=Invoke-RestMethod -Uri ($base+'/releases/tags/syncfix.11.1') -Headers $headers}catch{if([int]$_.Exception.Response.StatusCode -ne 404){throw}}
  if(-not $release){
-  $json=@{tag_name='syncfix.11';target_commitish=$commit;name='syncfix.11 - exact mission maps and experimental sync repairs';body=$body;draft=$true;prerelease=$true}|ConvertTo-Json
+  $json=@{tag_name='syncfix.11.1';target_commitish=$commit;name='syncfix.11.1 - release hardening';body=$body;draft=$true;prerelease=$true}|ConvertTo-Json
   $release=Invoke-RestMethod -Method Post -Uri ($base+'/releases') -Headers $headers -ContentType 'application/json' -Body ([Text.Encoding]::UTF8.GetBytes($json))
  }
  foreach($file in @($releaseZip,$cmd)){

@@ -7,6 +7,13 @@ Jager2251's separate Iron Nest Co-op mod.
 
 Current experimental test version: **0.2.1-syncfix.11** (MelonLoader).
 
+Update candidate: **0.2.1-syncfix.11.1**, reviewed on 2026-10-31. Independent
+magazine turn acceptance/queuing, deferred host magazine correction and entity
+authority guards are implemented. The build passes, with 148 managed/network
+checks and 30 package-safety checks. Native gameplay remains unverified for
+these new paths. See [upstream review](UPSTREAM_REVIEW_2026-10-31.md),
+[release security](RELEASE_SECURITY.md) and the [changelog](../CHANGELOG.md).
+
 See the [complete fork changelog](../CHANGELOG.md) for the changes since upstream
 commit `f49a188`, grouped by committed repair set and release.
 

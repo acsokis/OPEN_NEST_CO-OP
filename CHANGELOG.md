@@ -15,6 +15,31 @@ as releases here. All fork commits listed below were made on **2026-10-26**.
 “Implemented” describes code changes. It does not mean every native game path or
 two-PC session has passed. See [current validation](docs/SYNCFIX_11_TEST_HU.md).
 
+## Unreleased — syncfix.11.1 update and hardening
+
+- Independently implement selected magazine fixes motivated by the separate
+  2.5.1 release notes: publish only native-accepted turns, queue incoming actions
+  in per-gun order while busy, bound retries, deduplicate event IDs and scope
+  actions to the current mission. Reject non-member or non-host guest senders.
+- Retain host magazine corrections received while reloading/rotating and retry
+  them after the native operation finishes, instead of discarding the correction.
+- Reject guest entity health/lifecycle and magazine-state overwrites; player map
+  interactions continue through their dedicated channels.
+- 148 managed/network checks now pass, including delayed magazine actions,
+  cross-gun progress, native-ignored turns, expiry and queue capacity. Native
+  gameplay validation remains outstanding; this is not a full 2.5.1 port.
+
+- Pin updater ZIP hashes at build time; check release identity and download URL.
+- Add exact payload/archive allowlists, complete hash manifests, bounded safe
+  extraction and junction/reparse-point rejection. Preserve wrapper exit codes.
+- Add 30 passing release-safety checks. Local build passes; full .11.1 package,
+  installer and public download validation remain pending. See
+  [release security](docs/RELEASE_SECURITY.md).
+- [2026-10-31 upstream review](docs/UPSTREAM_REVIEW_2026-10-31.md): Open Nest
+  remains at the inherited `f49a188`; the separate BepInEx mod is at 2.5.1.
+  No newer Open Nest source changes or code from that separate binary have
+  been merged.
+
 ## 0.2.1-syncfix.11 — 2026-10-26
 
 Commit: [`441c773`](https://github.com/acsokis/OPEN_NEST_CO-OP/commit/441c773d221b8e0b26731bf2a6cdd546f5e0ad3c).

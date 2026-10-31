@@ -1,4 +1,6 @@
 param([string]$GamePath,[string]$PackageRoot,[switch]$VerifyOnly)
+# EMBEDDED_PACKAGE_SAFETY
+if(-not(Get-Command Test-CoopPayload -ErrorAction SilentlyContinue)){. (Join-Path $PSScriptRoot 'Package-Safety.ps1')}
 $ErrorActionPreference='Stop'
 Add-Type -AssemblyName System.Windows.Forms
 try{
@@ -44,18 +46,18 @@ try{
  if(-not $root){$root=Split-Path $env:IRON_NEST_INSTALLER}
  $payload=Join-Path $root 'payload'
  $manifest=Get-Content -LiteralPath (Join-Path $root 'SHA256.json') -Raw|ConvertFrom-Json
- foreach($item in $manifest){
-  foreach($base in @($payload,$game)){
-   $target=[IO.Path]::GetFullPath((Join-Path $base $item.Path))
-   if(-not $target.StartsWith($base.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Hibas csomag utvonal'}
-  }
- }
- foreach($item in $manifest){if((Get-FileHash -LiteralPath (Join-Path $payload $item.Path)).Hash -ne $item.SHA256){throw ('Serult javitocsomag: '+$item.Path)}}
- $backup=Join-Path $game ('Before_CoopSyncfix_'+(Get-Date -Format 'yyyyMMdd_HHmmss'))
+ Test-CoopPayload $payload @($manifest)
+ foreach($item in $manifest){$target=Resolve-CoopSafePath $game $item.Path;if(Test-Path -LiteralPath $target -PathType Container){throw 'Payload destination is a directory'}}
+ $payloadVersion=(Get-Item -LiteralPath (Join-Path $payload 'Mods\OpenNestCoop.MelonMod.dll')).VersionInfo.ProductVersion
+ if(($payloadVersion -split '\+',2)[0] -ne '0.2.1-syncfix.11.1'){throw 'Unexpected payload version'}
+ $backup=Join-Path $game ('Before_CoopSyncfix_'+(Get-Date -Format 'yyyyMMdd_HHmmss')+'_'+[guid]::NewGuid().ToString('N'))
+ Assert-CoopNoReparse $backup
  [IO.Directory]::CreateDirectory($backup)|Out-Null
  # Disable duplicate copies, including renamed/subfolder copies, before replacing.
  $mod=Join-Path $game 'Mods'
- foreach($dll in Get-ChildItem -LiteralPath $mod -Recurse -File -Filter '*.dll' -ErrorAction SilentlyContinue){
+ $modFiles=if(Test-Path -LiteralPath $mod){@(Get-CoopSafeFiles $mod)}else{@()}
+ foreach($dll in $modFiles){
+  if($dll.Extension -ne '.dll'){continue}
   $isCoop=$false
   try{$isCoop=([Reflection.AssemblyName]::GetAssemblyName($dll.FullName).Name -eq 'OpenNestCoop.MelonMod')}catch{}
   if(-not $isCoop -and $dll.Name -notlike '*OpenNestCoop*.dll'){continue}
@@ -65,9 +67,9 @@ try{
   [IO.Directory]::CreateDirectory((Split-Path $saved))|Out-Null
   Move-Item -LiteralPath $dll.FullName -Destination $saved
  }
- $results=@('Open Nest Co-op syncfix.11 installer',('Game: '+$game),('Backup: '+$backup))
+ $results=@('Open Nest Co-op syncfix.11.1 installer',('Game: '+$game),('Backup: '+$backup))
  foreach($item in $manifest){
-  $dest=Join-Path $game $item.Path
+  $dest=Resolve-CoopSafePath $game $item.Path
   if(Test-Path -LiteralPath $dest){$saved=Join-Path $backup $item.Path;[IO.Directory]::CreateDirectory((Split-Path $saved))|Out-Null;Copy-Item -LiteralPath $dest -Destination $saved -Force}
   [IO.Directory]::CreateDirectory((Split-Path $dest))|Out-Null
   Copy-Item -LiteralPath (Join-Path $payload $item.Path) -Destination $dest -Force
@@ -76,16 +78,16 @@ try{
  }
  $installed=Join-Path $game 'Mods\OpenNestCoop.MelonMod.dll'
  $version=(Get-Item -LiteralPath $installed).VersionInfo.ProductVersion
- if(($version -split '\+',2)[0] -ne '0.2.1-syncfix.11'){throw ('Varatlan telepitett verzio: '+$version)}
+ if(($version -split '\+',2)[0] -ne '0.2.1-syncfix.11.1'){throw ('Varatlan telepitett verzio: '+$version)}
  $results+=('Installed product version: '+$version)
  $checkScript=Join-Path $game 'OpenNestUpdate\Check-Install.ps1'
  $check=& $checkScript -GamePath $game -PassThru
  $results+=$check.Lines
  $report=Join-Path $root 'TELEPITES_EREDMENY.txt'
  $results|Set-Content -LiteralPath $report -Encoding UTF8
- $desktopReport=Join-Path ([Environment]::GetFolderPath('Desktop')) 'IRON_NEST_UPDATE_10_EREDMENY.txt'
+ $desktopReport=Join-Path ([Environment]::GetFolderPath('Desktop')) 'IRON_NEST_UPDATE_EREDMENY.txt'
  if(-not $VerifyOnly){try{$results|Set-Content -LiteralPath $desktopReport -Encoding UTF8}catch{Write-Host 'Az Asztalra nem lehetett jelentest irni; a csomag mappajaban megvan.'}}
- Write-Host 'TELEPITVE: Open Nest Co-op 0.2.1-syncfix.11.' -ForegroundColor Green
+ Write-Host 'TELEPITVE: Open Nest Co-op 0.2.1-syncfix.11.1.' -ForegroundColor Green
  Write-Host 'Mindket gepen ezt telepitsetek, majd a host folytassa a mentest es nyisson uj szobat.'
  Write-Host 'A csomag jegyzekeben szereplo fajlok telepultek. HDR es jatekmentesek nem modosultak.'
  Write-Host ('Mentes: '+$backup)
@@ -95,5 +97,5 @@ try{
  $status='FAJLOK RENDBEN'
  if(-not $check.Success){$status='CO-OP FRISSULT, DE ELTERO/HIANYZO MODOK VANNAK';foreach($issue in $check.Issues){Write-Host $issue -ForegroundColor Yellow}}
  Write-Host $status
- if(-not $VerifyOnly){[void][Windows.Forms.MessageBox]::Show(($status+[Environment]::NewLine+$version+[Environment]::NewLine+$game+[Environment]::NewLine+'Inditsd ujra Steambol. Reszletek: IRON_NEST_UPDATE_10_EREDMENY.txt'),'Co-op frissites')}
+ if(-not $VerifyOnly){[void][Windows.Forms.MessageBox]::Show(($status+[Environment]::NewLine+$version+[Environment]::NewLine+$game+[Environment]::NewLine+'Inditsd ujra Steambol. Reszletek: IRON_NEST_UPDATE_EREDMENY.txt'),'Co-op frissites')}
 }catch{Write-Host ('HIBA: '+$_.Exception.Message) -ForegroundColor Red;if(-not $VerifyOnly){[void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'SIKERTELEN telepites')};exit 1}

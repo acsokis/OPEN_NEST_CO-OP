@@ -168,6 +168,9 @@ public sealed class EntitySync : ISyncedModule
     {
         var net = CoopRuntime.Net;
         if (net == null) return;
+        // Entity health/lifecycle belongs to the host. Local player dragging
+        // uses the dedicated map interaction modules, never this state packet.
+        if (!SessionAuthority.AcceptHostState(net.IsHost, from == net.HostSteamId)) return;
         try
         {
             var r = new NetDataReader(data);

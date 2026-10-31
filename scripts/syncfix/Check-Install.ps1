@@ -1,5 +1,6 @@
 param([string]$GamePath,[string]$ExpectedManifest,[string]$ReportPath,[switch]$PassThru)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'Package-Safety.ps1')
 # Read-only inspection. It never changes the loader, saves, mods or HDR.
 if(-not $GamePath){$GamePath=Split-Path -Parent $PSScriptRoot}
 $game=[IO.Path]::GetFullPath($GamePath).TrimEnd('\')
@@ -16,8 +17,7 @@ if(-not $expected){throw 'Ures ellenorzesi jegyzek'}
 foreach($item in $expected){
  if(-not $item.Path -or [string]$item.SHA256 -notmatch '^[a-fA-F0-9]{64}$'){throw 'Hibas ellenorzesi jegyzek: utvonal/SHA256 hianyzik'}
  $relative=[string]$item.Path
- $path=[IO.Path]::GetFullPath((Join-Path $game $relative))
- if(-not $path.StartsWith($game+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Hibas ellenorzesi jegyzek'}
+ $path=Resolve-CoopSafePath $game $relative
  if(-not(Test-Path -LiteralPath $path -PathType Leaf)){$issues.Add('HIANYZIK: '+$relative);continue}
  $actual=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
  $version=(Get-Item -LiteralPath $path).VersionInfo.ProductVersion

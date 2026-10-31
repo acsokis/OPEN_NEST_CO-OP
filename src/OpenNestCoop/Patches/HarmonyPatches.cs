@@ -112,7 +112,7 @@ public static class HarmonyPatches
         // 弹舱动作（CylinderShellSelector.OnLoadButtonClicked 推弹头 / OnMoveButtonClicked 切弹舱）——事件解耦（P1）：
         // 直接广播业务方法调用，对端调同名方法（不依赖按钮 active，修装填区按钮 inactive 排队问题）。
         TryPatch(typeof(CylinderShellSelector), "OnLoadButtonClicked", prefix: nameof(PreCylLoadShell));
-        TryPatch(typeof(CylinderShellSelector), "OnMoveButtonClicked", prefix: nameof(PreCylMoveCylinder));
+        TryPatch(typeof(CylinderShellSelector), "OnMoveButtonClicked", prefix: nameof(PreCylMoveCylinder), postfix: nameof(PostCylMoveCylinder));
         // 多人模式移除“失焦暂停”：游戏切出去（虚拟机/Alt-Tab）自动暂停，联机时拦截
         TryPatch(typeof(PauseManager), "OnApplicationFocus", prefix: nameof(PreAppFocus));
         // 任务过渡事件（完成/失败/重载/回菜单）：主机/操作端触发 → 广播 → 对端执行同样操作（MissionEventSync）
@@ -661,10 +661,21 @@ public static class HarmonyPatches
         try { if (OpenNestCoop.Net.AutoJoin.WantNewSync) return; CylinderActionSync.OnLocalAction(__instance, CylinderActionSync.C_EvLoadShell); }
         catch (System.Exception ex) { CoopRuntime.LogSource?.LogWarning($"Harmony cyl load shell: {ex.Message}"); }
     }
-    private static void PreCylMoveCylinder(CylinderShellSelector __instance)
+    private static void PreCylMoveCylinder(CylinderShellSelector __instance, out bool __state)
     {
-        try { if (OpenNestCoop.Net.AutoJoin.WantNewSync) return; CylinderActionSync.OnLocalAction(__instance, CylinderActionSync.C_EvMoveCylinder); }
+        __state = true;
+        try { __state = __instance == null || __instance.rotationPending; }
         catch (System.Exception ex) { CoopRuntime.LogSource?.LogWarning($"Harmony cyl move cylinder: {ex.Message}"); }
+    }
+    private static void PostCylMoveCylinder(CylinderShellSelector __instance, bool __state)
+    {
+        try
+        {
+            if (!OpenNestCoop.Net.AutoJoin.WantNewSync && __instance != null
+                && MagazineActionQueue.AcceptedMove(__state, __instance.rotationPending))
+                CylinderActionSync.OnLocalAction(__instance, CylinderActionSync.C_EvMoveCylinder);
+        }
+        catch (System.Exception ex) { CoopRuntime.LogSource?.LogWarning("Harmony accepted magazine move: " + ex.Message); }
     }
 
     /// <summary>拦截 PauseManager.OnApplicationFocus：联机时失焦不暂停（跳过原方法）。</summary>

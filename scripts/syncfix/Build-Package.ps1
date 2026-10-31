@@ -1,5 +1,6 @@
 param([Parameter(Mandatory=$true)][string]$GamePath,[switch]$IncludeCatMods)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'Package-Safety.ps1')
 $repo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $changes=git -C $repo status --porcelain
 if($LASTEXITCODE -or $changes){throw 'A clean Git checkout is required for matching corresponding source.'}
@@ -45,6 +46,7 @@ $checkDir=Join-Path $payload 'OpenNestUpdate'
 New-Item -ItemType Directory $checkDir -Force|Out-Null
 $expected|ConvertTo-Json|Set-Content -LiteralPath (Join-Path $checkDir 'ExpectedMods.json') -Encoding UTF8
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Check-Install.ps1') -Destination $checkDir -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Package-Safety.ps1') -Destination $checkDir -Force
 $checkCmd='@echo off'+"`r`n"+'powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0OpenNestUpdate\Check-Install.ps1" -GamePath "%~dp0." -ReportPath "%~dp0IRON_NEST_ELLENORZES.txt"'+"`r`n"+'pause'+"`r`n"
 [IO.File]::WriteAllText((Join-Path $payload 'IRON_NEST_ELLENORZES.cmd'),$checkCmd,[Text.Encoding]::ASCII)
 Get-ChildItem $payload -Recurse -File|ForEach-Object{
@@ -58,12 +60,16 @@ pause
 exit /b
 # POWERSHELL
 '@
-[IO.File]::WriteAllText((Join-Path $stage 'JAVITAS.cmd'),($header -replace "`r?`n","`r`n")+"`r`n"+[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Install.ps1')),[Text.UTF8Encoding]::new($false))
+$install=[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Install.ps1')).Replace('# EMBEDDED_PACKAGE_SAFETY',[IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Package-Safety.ps1')))
+[IO.File]::WriteAllText((Join-Path $stage 'JAVITAS.cmd'),($header -replace "`r?`n","`r`n")+"`r`n"+$install,[Text.UTF8Encoding]::new($false))
 Copy-Item (Join-Path $repo 'LICENSE') $stage -Force
 Copy-Item (Join-Path $repo 'docs\FORK_STATUS.md') (Join-Path $stage 'README.md') -Force
 git -C $repo archive --format=zip -o (Join-Path $stage 'source.zip') HEAD
 if($LASTEXITCODE){throw 'Corresponding source archive failed'}
 $zip=$stage+'.zip'
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
+Test-CoopPayload $payload @(Get-Content (Join-Path $stage 'SHA256.json') -Raw|ConvertFrom-Json)
+$auditExtract=Join-Path $repo ('artifacts\ArchiveAudit_'+[guid]::NewGuid().ToString('N'))
+Expand-CoopSafeArchive $zip $auditExtract
 & (Join-Path $PSScriptRoot 'Build-SingleFile.ps1') -PackageZip $zip -OutputPath ($stage+'.cmd')
 Get-Item $zip,($stage+'.cmd') | Select-Object FullName,Length

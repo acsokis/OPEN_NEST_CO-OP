@@ -12,6 +12,7 @@
     <Compile Include="../../src/OpenNestCoop/GameSync/SharedDocumentStore.cs" Link="SharedDocumentStore.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/ReliableDocumentSync.cs" Link="ReliableDocumentSync.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/GunKeyOrder.cs" Link="GunKeyOrder.cs" />
+    <Compile Include="../../src/OpenNestCoop/GameSync/MagazineActionQueue.cs" Link="MagazineActionQueue.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/MapPanelCommand.cs" Link="MapPanelCommand.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/WorldControlIntent.cs" Link="WorldControlIntent.cs" />
     <Compile Include="../../src/OpenNestCoop/GameSync/ScoutSyncModels.cs" Link="ScoutSyncModels.cs" />

@@ -26,6 +26,7 @@ public sealed class ShellSync : ISyncedModule
     private int _scanLog;
     private int _recvDiag;
     private readonly Dictionary<CylinderShellSelector, string> _known = new();
+    private readonly Dictionary<string, string> _pendingHost = new();
     private static readonly Dictionary<string, GameObject> ResourcePrefabs = new(StringComparer.Ordinal);
     private static float _nextResourceScan;
     private static int _resourceScene = int.MinValue;
@@ -67,7 +68,17 @@ public sealed class ShellSync : ISyncedModule
         if (net.State != SessionState.Hosting && net.State != SessionState.Joined) return;
         // 主机权威：只主机广播弹舱（含全 NULL——弹药消耗/清空也要同步）；
         // 客机切弹/上膛通过事件上行（ButtonClickSync 切舱按钮、ReloadAdvance 上膛），由主机应用后广播。
-        if (!net.IsHost) return;
+        if (!net.IsHost)
+        {
+            foreach (var pending in new List<KeyValuePair<string, string>>(_pendingHost))
+            {
+                var cylinder = FindCylByGunKey(pending.Key);
+                if (cylinder == null || cylinder.rotationPending || cylinder.artilleryReloadController?.working == true) continue;
+                ApplyCsv(pending.Key, pending.Value);
+                if (SnapshotCsv(cylinder) == pending.Value) _pendingHost.Remove(pending.Key);
+            }
+            return;
+        }
         _heartbeat += Interval;
         bool force = _heartbeat >= Heartbeat;
         if (force) _heartbeat = 0f;
@@ -199,18 +210,21 @@ public sealed class ShellSync : ISyncedModule
     {
         var net = CoopRuntime.Net;
         if (net == null) return;
+        if (!SessionAuthority.AcceptHostState(net.IsHost, from == net.HostSteamId)) return;
         try
         {
             var r = new NetDataReader(data);
             r.GetByte(); // 跳过消息类型
             string gunKey = r.GetString();
             string csv = r.GetString();
-            if (net.IsHost)
-                net.EnqueueBatch(data, true); // 转发
+            if (gunKey.Length == 0 || gunKey.Length > 2048 || csv.Length > 4096) return;
+            if (!_pendingHost.ContainsKey(gunKey) && _pendingHost.Count >= 16) return;
+            _pendingHost[gunKey] = csv;
             // 诊断：打印收到内容（客机是否收到主机弹药 csv）
             if ((++_recvDiag % 3) == 1)
                 CoopLog.Debug("ShellSync.recv", () => $"[ShellSync] recv gun='{gunKey}' csv='{csv}' isHost={net.IsHost}");
-            ApplyCsv(gunKey, csv);
+            // Tick retries once the native rotation/reload finishes. Do not lose
+            // the final host correction merely because it arrived while busy.
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"ShellSync OnPacket: {ex.Message}"); }
     }
@@ -403,5 +417,5 @@ public sealed class ShellSync : ISyncedModule
 
     public void OnSessionStarted() { }
     public void OnSessionEnded() { Reset(); }
-    public void Reset() { _known.Clear(); }
+    public void Reset() { _known.Clear(); _pendingHost.Clear(); }
 }

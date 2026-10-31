@@ -37,36 +37,57 @@ public sealed class CylinderActionSync : ISyncedModule
 
     /// <summary>正在复现远端弹舱动作（防环：应用远端时本地方法不再转发）。</summary>
     public static bool IsApplyingCylinder;
-    private static float _lastLocalAt = -1f;
+    private readonly MagazineActionQueue _queue = new();
+    private readonly System.Collections.Generic.HashSet<string> _seen = new();
+    private int _scene;
     private static int _log;
 
-    public void Tick(float dt) { } // 事件驱动，无轮询
+    public void Tick(float dt)
+    {
+        var net = CoopRuntime.Net;
+        if (net == null || (net.State != SessionState.Hosting && net.State != SessionState.Joined)) { _queue.Reset(); return; }
+        EnsureScene();
+        _queue.Tick(Time.realtimeSinceStartup, TryApply,
+            key => CoopRuntime.LogSource?.LogWarning("[CylinderActionSync] timed out waiting for native magazine: " + key));
+    }
+    private void EnsureScene()
+    {
+        int scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle;
+        if (_scene != scene) { _queue.Reset(); _seen.Clear(); _scene = scene; }
+    }
 
     public void OnPacket(ulong from, byte[] data)
     {
         var net = CoopRuntime.Net;
         if (net == null) return;
+        bool member = false;
+        foreach (var peer in net.Roster) if (!peer.IsLocal && (ulong)peer.SteamId == from) member = true;
+        if (!member || (!net.IsHost && from != net.HostSteamId)) return;
         try
         {
             var r = new NetDataReader(data);
-            r.GetByte(); // 跳过消息类型
+            r.SkipBytes(NetProtocol.TypeLen);
             byte ev = r.GetByte();
             string gunKey = r.GetString();
-            if (net.IsHost)
+            string id = r.GetString();
+            string mission = r.GetString();
+            if (mission != (MissionManager.Instance?.CurrentMission?.MissionID ?? "")) return;
+            EnsureScene();
+            if ((ev != EvLoadShell && ev != EvMoveCylinder) || gunKey.Length == 0 || gunKey.Length > 2048
+                || !Guid.TryParseExact(id, "N", out _) || r.AvailableBytes != 0 || _seen.Count >= 8192 || _seen.Contains(id)) return;
+            if (_queue.Add(gunKey, ev, Time.realtimeSinceStartup, () =>
             {
-                // 主机中继给其他客机（不含发起者）
-                foreach (var p in net.Roster)
-                    if (!p.IsLocal && (ulong)p.SteamId != from)
-                        net.Transport.Send(p.SteamId, data, true);
-            }
-            Apply(ev, gunKey);
+                if (net.IsHost) foreach (var p in net.Roster)
+                    if (!p.IsLocal && (ulong)p.SteamId != from) net.Transport.Send(p.SteamId, data, true);
+            })) _seen.Add(id);
+            else CoopRuntime.LogSource?.LogWarning("[CylinderActionSync] pending action limit reached");
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"CylinderActionSync OnPacket: {ex.Message}"); }
     }
 
     public void OnSessionStarted() { }
     public void OnSessionEnded() { Reset(); }
-    public void Reset() { IsApplyingCylinder = false; _lastLocalAt = -1f; }
+    public void Reset() { IsApplyingCylinder = false; _queue.Reset(); _seen.Clear(); }
 
     /// <summary>本地 CylinderShellSelector 方法被调用（Harmony prefix）→ 广播事件。
     /// ⚠️ 用**关联 GunController 的 Transform 路径**（含 "Gun System Left/Right"，场景静态、两端一致）做标识——
@@ -87,12 +108,11 @@ public sealed class CylinderActionSync : ISyncedModule
                 CoopRuntime.LogSource?.LogWarning($"[CylinderActionSync] local gun key not found, skip (cyl path='{PathOf(cyl.transform)}')");
                 return;
             }
-            float now = Time.realtimeSinceStartup;
-            if (now - _lastLocalAt < 0.15f) return; // 防环去重：同实例同事件 0.15s 内不重复上报
-            _lastLocalAt = now;
             var w = NetProtocol.Begin((MsgType)MsgTypeId);
             w.Put((byte)ev); // ⚠️ 必须转 byte（OnPacket 用 GetByte 读）——原 w.Put(ev) 写 int 4 字节，读 1 字节错位 → gunKey 读空 → "apply cyl not found gun=''"
             w.Put(gunKey);
+            w.Put(Guid.NewGuid().ToString("N"));
+            w.Put(MissionManager.Instance?.CurrentMission?.MissionID ?? "");
             var data = NetProtocol.Snapshot(w);
             if (net.IsHost)
             {
@@ -111,14 +131,15 @@ public sealed class CylinderActionSync : ISyncedModule
     /// ⚠️ 不从 FindObjectsOfType 找 cyl（主机端 CylinderShellSelector 场景不可见/FindObjectsOfType 返回空 →
     /// 推弹头不同步根因）。改为从 turret.guns[i].artilleryReloadController.cylinderShellSelector 直接取
     /// （ReloadSync 已证明主机端能拿到 reload → 其 cylinderShellSelector 属性可用）。</summary>
-    private static void Apply(byte ev, string gunKey)
+    private static bool TryApply(string gunKey, byte ev)
     {
         var cyl = FindCylByGunKey(gunKey);
         if (cyl == null)
         {
             CoopRuntime.LogSource?.LogWarning($"[CylinderActionSync] apply cyl not found gun='{gunKey}'");
-            return;
+            return false;
         }
+        if (cyl.rotationPending || cyl.artilleryReloadController?.working == true) return false;
         IsApplyingCylinder = true;
         try
         {
@@ -141,12 +162,17 @@ public sealed class CylinderActionSync : ISyncedModule
                     AlignReloadState(cyl, 4);
                     cyl.OnLoadButtonClicked();
                     break;
-                case EvMoveCylinder: cyl.OnMoveButtonClicked(); break;
+                case EvMoveCylinder:
+                    cyl.OnMoveButtonClicked();
+                    if (!cyl.rotationPending) return false;
+                    break;
             }
             CoopRuntime.LogSource?.LogInfo($"[CylinderActionSync] applied ev={ev} gun='{gunKey}'");
+            return true;
         }
         catch (Exception ex) { CoopRuntime.LogSource?.LogWarning($"CylinderActionSync apply: {ex.Message}"); }
         finally { IsApplyingCylinder = false; }
+        return false;
     }
 
     /// <summary>延迟容忍：对端状态机落后时 SetState 对齐到目标阶段（force=true 安全设置，不触发自动推进），
