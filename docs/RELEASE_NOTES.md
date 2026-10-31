@@ -1,0 +1,53 @@
+# Open Nest Co-op — acsokis syncfix.11.1
+
+Experimental **MelonLoader 0.7.3 x64** fork of Open Nest Co-op by 1499501762 and
+upstream contributors. Fork contributions by Gabor Kocsis (@acsokis), with
+AI-assisted implementation. AGPL-3.0 and dependency notices are preserved.
+
+## Downloads
+
+- **IRON_NEST_UPDATE.cmd:** automatic install/update for an existing MelonLoader
+  installation. Includes backups and a file checker. Both players must update.
+- **OPEN_NEST_SYNCFIX_11_1_MANUAL.zip:** Nexus/manual-install package; extract
+  beside the game EXE, merging `Mods` and `UserLibs`. No Vortex support yet.
+- **NEXUS_DESCRIPTION.txt / NEXUS_UPLOAD.md:** ready-to-paste page text and upload
+  notes, with requirements, attribution, known limits and original-versus-fork changes.
+- [Copy-paste installer command](https://github.com/acsokis/OPEN_NEST_CO-OP/blob/main/docs/INSTALL.md).
+
+The manual package adds documentation and distribution packaging only. Its five
+DLLs are identical to the previously published .11.1 binary release. It excludes
+the automatic installer's nested source archive and executable installer scripts.
+
+## Changes from the original source snapshot
+
+- Exact host MissionID selection instead of ambiguous scene-based mission choice.
+- Native map initialization, card lifecycle/shared movement and timer authority repairs.
+- Stable left/right gun routing and improved trajectory/reload compatibility.
+- Matching-model Modernization interoperability and guest door/light intents.
+- Actual native drawing endpoints, card catalogue registration and exact requisition routing.
+- Magazine action ordering/retries, native-accepted turn filtering and deferred host correction.
+- Host-only entity health/lifecycle and magazine-state authority.
+- Local reconnect handling, isolated test profiles and default-hidden F8 chat.
+- Hardened updater: pinned ZIP hash, exact file allowlists, bounded extraction,
+  path/link rejection, backup and explicit installation checks.
+
+This is not the original upstream release or a full port of the separate
+BepInEx 2.5.1 co-op implementation. Modernization, its media, HDR, the loader,
+game files, generated interop assemblies and saves are not bundled.
+
+## Evidence and limits
+
+Build: zero errors. **148 managed/network checks and 31 package-safety checks**
+passed. Local two-instance connection and matching backgrounds were verified.
+The manual ZIP's file layout and archived hashes were checked, and its local
+Microsoft Defender scan reported no threats. This is not a malware-free
+certification or a complete multiplayer verification.
+
+New magazine paths, every private F1-F3 command, all drawings/cards/doors/scout
+paths and independent-PC/Steam coverage remain incomplete. Game-update-1705
+coverage is not established. Read [validation](SYNCFIX_11_TEST_HU.md),
+[security limits](RELEASE_SECURITY.md) and the [full changelog](../CHANGELOG.md).
+
+Exact gameplay binary/source commit: `d410603044326fee17dfa39bb285353fd5506b16`.
+[Corresponding source](https://github.com/acsokis/OPEN_NEST_CO-OP/archive/refs/tags/syncfix.11.1.zip).
+Later main-branch documentation commits do not change those binary assets.

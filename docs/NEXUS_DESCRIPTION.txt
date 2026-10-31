@@ -1,0 +1,61 @@
+Open Nest Co-op - acsokis Syncfix Fork (MelonLoader)
+
+SUMMARY
+Experimental Open Nest Co-op fork with exact mission/map matching, shared-state repairs, magazine action retries and a hardened updater. MelonLoader 0.7.3 x64 required. Manual install only; no Vortex game support yet.
+
+WHAT THIS IS
+An experimental fork of 1499501762's Open Nest Co-op, based on upstream commit f49a18863adb69b1401689843d08015e2d8eec8a. Fork contributions by Gabor Kocsis (acsokis), with AI-assisted implementation. The original authors and AGPL-3.0 license are retained.
+This is not an official upstream release and not Jager2251's separate BepInEx co-op mod. It is not a full port of that mod's 2.5.1 release.
+
+CHANGES COMPARED WITH THE INHERITED OPEN NEST SOURCE
+- Follow the host's exact MissionID rather than the first card sharing a Unity scene, fixing a concrete cause of different background maps.
+- Add native map-only initial transfer and calculator-card creation/movement/closure handling, including stale-update protection.
+- Transfer the complete counter-battery timer state and guard guest-originated automatic mission outcomes.
+- Preserve the native projectile start clock; add stable left/right gun routing and reload/API compatibility repairs.
+- Add matching-version Modernization data-model interoperability for supported notes, selections, measurements, radar and fire-plan data. Physical automatic execution remains host-controlled.
+- Add guest desired-state handling for doors/lights, and native drawing endpoints instead of guessed rendered-tip offsets.
+- Register the punchcard catalogue, use stable card-slot identities, and route requisitions to the exact requested card/station.
+- Queue incoming magazine actions per gun; publish native-accepted turns only; retain host corrections received while the magazine is busy.
+- Reject guest overwrites of entity health/lifecycle and magazine state.
+- Repair local TCP replacement/reconnect handling and add an isolated two-instance test setup.
+- Add experimental scout lifecycle/animation/audio replication. This path remains incompletely verified.
+- Hide chat by default; F8 toggles it locally.
+- Add backups, hash checking and hardened update/archive handling. These are risk-reduction measures, not a malware-free guarantee.
+
+REQUIREMENTS
+Windows x64; Iron Nest: Heavy Turret Simulator; MelonLoader 0.7.3 x64 already installed for the game. Launch once with MelonLoader to generate interop assemblies before installing this mod.
+Modernization is optional and distributed separately. Both players need matching versions of any gameplay-affecting third-party mods they use.
+Do not run another co-op implementation or the BepInEx co-op stack alongside this fork.
+
+MANUAL INSTALLATION
+1. Close Iron Nest completely. Back up existing co-op files and disable old/renamed copies of OpenNestCoop.MelonMod.dll.
+2. Download OPEN_NEST_SYNCFIX_11_1_MANUAL.zip.
+3. Extract it beside Iron Nest Heavy Turret Simulator.exe, merging the Mods and UserLibs folders. Do not extract the whole package inside Mods.
+4. Launch through Steam. Check the fresh MelonLoader/Latest.log for 0.2.1-syncfix.11.1 and exactly one co-op assembly.
+5. Every player installs the same version. Test together before relying on a long save session.
+There is currently no supported Vortex installation. Use the manual download and instructions.
+
+OPTIONAL AUTOMATIC INSTALLER
+The GitHub release offers IRON_NEST_UPDATE.cmd and a SHA256-checked copy-paste PowerShell command. The updater requires MelonLoader already installed, backs up replaced co-op files, and adds a game-folder file checker.
+The automatic updater is a separate GitHub download; it is not embedded in this Nexus ZIP.
+Instructions: https://github.com/acsokis/OPEN_NEST_CO-OP/blob/main/docs/INSTALL.md
+
+VALIDATION AND KNOWN LIMITS
+148 managed/network checks and 31 package-safety checks passed for the code release. Build: zero errors. Real local host/guest handshake and matching backgrounds were verified using two full game instances on one PC.
+The release ZIP's local Microsoft Defender scan found no threats; that does not certify all code/dependencies or future files as safe.
+Full independent-PC/Steam regressions, all private F1-F3 commands, concurrent edits, physical safe/chip/pairing, all drawing shapes/labels, doors/lights, requisition workflows, scout behaviour and both-gun edge cases remain incompletely verified. The newest magazine paths need native gameplay tests.
+Support for every mechanic added by game update 1705 is not established. Match your game/mod stack and retain backups.
+
+WHAT IS NOT INCLUDED
+MelonLoader, BepInEx, the game, generated interop assemblies, Modernization/media, other third-party mod implementations, HDR/ReShade, personal saves or private session logs. The manual archive includes this co-op DLL and its listed library dependencies.
+
+UNINSTALL
+Close the game and remove Mods/OpenNestCoop.MelonMod.dll. Remove included UserLibs only if no other mod needs them. Do not delete entire mod/library/save folders. The manual package does not create an automatic backup.
+
+CREDITS, LICENSE AND SOURCE
+Original Open Nest Co-op: 1499501762 and upstream contributors.
+Original project: https://github.com/1499501762/OPEN_NEST_CO-OP
+Fork and full changelog: https://github.com/acsokis/OPEN_NEST_CO-OP
+Exact binary/source release: https://github.com/acsokis/OPEN_NEST_CO-OP/releases/tag/syncfix.11.1
+Corresponding source: https://github.com/acsokis/OPEN_NEST_CO-OP/archive/refs/tags/syncfix.11.1.zip
+Co-op source license: AGPL-3.0. LiteNetLib and SharpGLTF library notices are included separately. No modified Jager2251 binaries or source are included.

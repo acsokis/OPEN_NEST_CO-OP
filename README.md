@@ -14,6 +14,10 @@ The .11.1 release adds independent magazine fixes and
 [release hardening](docs/RELEASE_SECURITY.md); it does not contain or fully port
 the separate BepInEx 2.5.1 implementation.
 
+**Install:** [copy-paste command and manual instructions](docs/INSTALL.md).
+**Nexus upload:** [ready-to-paste description and file notes](docs/NEXUS_UPLOAD.md).
+The Nexus package is manual-install only; Vortex game support is not provided.
+
 Play as a crew inside a giant fortress turret — calibrate machinery, load shells,
 man the fire-control computer, brew coffee — together with friends over Steam.
 

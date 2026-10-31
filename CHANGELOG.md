@@ -16,6 +16,17 @@ the .11.1 update follows on **2026-10-31**.
 “Implemented” describes code changes. It does not mean every native game path or
 two-PC session has passed. See [current validation](docs/SYNCFIX_11_TEST_HU.md).
 
+## Distribution documentation — syncfix.11.1
+
+- Add a SHA256-verified copy-paste PowerShell install command and English manual
+  install/update/removal instructions; MelonLoader remains a separate prerequisite.
+- Add a Nexus main-file repack preserving the released DLL bytes, with Mods and
+  UserLibs at the archive root, source links, attribution and MIT library notices.
+  Exclude nested archives and executable installer scripts from that ZIP.
+- Add ready-to-paste Nexus page text and an upload checklist. Vortex support is
+  unavailable; the package is explicitly labelled manual install only.
+- Existing gameplay binaries and original release assets remain unchanged.
+
 ## 0.2.1-syncfix.11.1 — 2026-10-31
 
 [Release](https://github.com/acsokis/OPEN_NEST_CO-OP/releases/tag/syncfix.11.1).
