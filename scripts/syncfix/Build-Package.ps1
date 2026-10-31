@@ -68,7 +68,8 @@ git -C $repo archive --format=zip -o (Join-Path $stage 'source.zip') HEAD
 if($LASTEXITCODE){throw 'Corresponding source archive failed'}
 $zip=$stage+'.zip'
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
-Test-CoopPayload $payload @(Get-Content (Join-Path $stage 'SHA256.json') -Raw|ConvertFrom-Json)
+$payloadManifest=Get-Content (Join-Path $stage 'SHA256.json') -Raw|ConvertFrom-Json
+Test-CoopPayload $payload $payloadManifest
 $auditExtract=Join-Path $repo ('artifacts\ArchiveAudit_'+[guid]::NewGuid().ToString('N'))
 Expand-CoopSafeArchive $zip $auditExtract
 & (Join-Path $PSScriptRoot 'Build-SingleFile.ps1') -PackageZip $zip -OutputPath ($stage+'.cmd')

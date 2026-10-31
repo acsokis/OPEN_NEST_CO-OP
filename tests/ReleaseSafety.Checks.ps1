@@ -12,6 +12,8 @@ $payload=Join-Path $work 'payload';New-Item -ItemType Directory -Path $payload|O
 $manifest=@()
 foreach($name in Get-CoopPayloadNames){$path=Join-Path $payload $name;New-Item -ItemType Directory -Path (Split-Path $path) -Force|Out-Null;[IO.File]::WriteAllText($path,'fixture');$manifest+=[pscustomobject]@{Path=$name;SHA256=(Get-FileHash -LiteralPath $path).Hash}}
 Test-CoopPayload $payload $manifest;$script:passed++
+$fromJson=$manifest|ConvertTo-Json|ConvertFrom-Json
+Test-CoopPayload $payload $fromJson;$script:passed++
 Reject {Test-CoopPayload $payload @()}
 Reject {Test-CoopPayload $payload ($manifest+$manifest[0])}
 Reject {Test-CoopPayload $payload $manifest[0..7]}
