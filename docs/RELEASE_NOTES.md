@@ -4,6 +4,24 @@ Experimental **MelonLoader 0.7.3 x64** fork of Open Nest Co-op by 1499501762 and
 upstream contributors. Fork contributions by Gabor Kocsis (@acsokis), with
 AI-assisted implementation. AGPL-3.0 and dependency notices are preserved.
 
+## What is shared
+
+Work as one turret crew with a shared tactical workspace. Sharing is implemented
+for supported **notes, target selections, coordinates/measurements, fire-plan
+data, tactical map tokens/drawings and printed calculator/aiming cards**.
+Supported printed fire-mission cards share creation, placement, dragging and
+closure, rather than being independent printouts on each PC.
+
+Both host and guests can submit supported edits. The host maintains the accepted
+shared state and drives automatic world outcomes. Modernization data sharing
+requires matching Modernization versions on both PCs. Opening F1/F2/F3, cursor
+focus, window visibility and chat visibility remain local; another player's
+edit does not force your menu open. Simultaneous conflicting edits can be
+rejected in favour of the accepted host state.
+
+These are implemented paths with incomplete native two-PC coverage, particularly
+notes/target/card workflows and private F1-F3 commands. See the limits below.
+
 ## Downloads
 
 - **IRON_NEST_UPDATE.cmd:** automatic install/update for an existing MelonLoader

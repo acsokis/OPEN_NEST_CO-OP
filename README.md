@@ -7,6 +7,13 @@
 
 **Multiplayer co-op mod for [Iron Nest: Heavy Turret Simulator](https://store.steampowered.com/app/2950790)** (Unity 6 / IL2CPP).
 
+**Shared crew workspace:** supported notes, target selections, measurements,
+fire plans, map tokens/drawings and printed calculator/aiming cards have sharing
+paths. Both host and guests can submit supported edits; the host maintains the
+accepted state and automatic outcomes. Modernization integration needs matching
+versions. Menu opening, focus and visibility remain local. These paths have
+incomplete native/two-PC validation; see [how sharing works and its limits](docs/NEXUS_DESCRIPTION.txt).
+
 Fork history: [CHANGELOG.md](CHANGELOG.md), from the inherited upstream commit
 through syncfix.11.1. [Current validation](docs/SYNCFIX_11_TEST_HU.md) distinguishes
 implemented changes from automated checks and native gameplay confirmation.

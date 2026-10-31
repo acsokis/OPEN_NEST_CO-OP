@@ -1,5 +1,17 @@
 Open Nest Co-op - acsokis Syncfix Fork (MelonLoader)
 
+WHAT IS SHARED / HOW CO-OP WORKS
+Work as one turret crew with a shared tactical workspace. Both the host and guests can make supported edits; the host maintains the common accepted state and drives automatic mission outcomes.
+
+- Shared notes: supported native note sections and measurement-note data are synchronized, so a note edited by one player is intended to appear for the rest of the crew.
+- Shared targets and aiming data: supported target cards, target selection, coordinates, measurements and fire-plan edits are exchanged through the Modernization bridge. Both PCs need matching Modernization versions for this integration.
+- Shared calculator / aiming cards: supported printed fire-mission cards are replicated as objects, including creation, placement, dragging and closure. Players can work with the same cards rather than keeping separate local printouts.
+- Shared tactical map: supported tokens, drawings and measurement endpoints are exchanged, and the host supplies the initial map state. The exact mission identity is synchronized so everyone loads the same background map.
+- Shared turret operation: gun routing, magazine actions, reload/fire paths and supported requisition interactions are synchronized. Automatic purchases/firing, counter-battery outcomes and other automatic world results remain host-controlled.
+
+Opening F1/F2/F3, mouse focus, window visibility and chat visibility remain local to each player. Sharing the data does not force the other player to open the same menu. Edits are exchanged over the connection; simultaneous conflicting edits can be rejected in favour of the host's accepted state.
+This is implemented sharing, not a claim that every function has passed multiplayer testing. Full notes/target/card workflows, every private F1-F3 command and several physical interactions still need native two-PC validation; see the limits below.
+
 SUMMARY
 Experimental Open Nest Co-op fork with exact mission/map matching, shared-state repairs, magazine action retries and a hardened updater. MelonLoader 0.7.3 x64 required. Manual install only; no Vortex game support yet.
 
